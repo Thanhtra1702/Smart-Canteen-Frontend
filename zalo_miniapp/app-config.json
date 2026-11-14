@@ -1,0 +1,16 @@
+{
+  "app": {
+    "title": "Smart Canteen - Đặt Cơm Thông Minh",
+    "headerTitle": "Smart Canteen",
+    "headerColor": "#1e293b",
+    "textColor": "white",
+    "leftButton": "none",
+    "statusBar": "transparent"
+  },
+  "listCSS": [],
+  "listSyncJS": [],
+  "pages": [
+    "pages/index"
+  ]
+}
+
