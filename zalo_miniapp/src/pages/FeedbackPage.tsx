@@ -2,65 +2,49 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 import {
-  Star,
-  Camera,
-  Send,
-  MessageSquareHeart,
-  CheckCircle2,
-  Clock,
-  Sparkles,
-  AlertCircle,
-  X,
-  Plus,
-  ShieldCheck,
-} from 'lucide-react';
+  StarIcon as Star,
+  CameraIcon as Camera,
+  PaperPlaneTiltIcon as Send,
+  ChatCircleDotsIcon as MessageSquareHeart,
+  XIcon as X,
+} from '@phosphor-icons/react';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
+import { FeedbackSuccessNotice } from '../components/FeedbackModal';
 
 export const FeedbackPage: React.FC = () => {
-  const { user, currentRole, selectedCanteen, selectedChild, myFeedbacks, refreshUserData } = useApp();
+  const { currentRole, selectedCanteen, myFeedbacks, refreshUserData, refreshFeedbacks, showAlert } = useApp();
 
   const [rating, setRating] = useState<number>(5);
-  const [selectedTags, setSelectedTags] = useState<string[]>([
-    'Ngon miệng',
-    'Rất hài lòng',
-    'Nhanh nhẹn & Thân thiện',
-  ]);
   const [comment, setComment] = useState<string>(
     'Thịt gà rất vừa vị, nước sốt ngon. Hy vọng hôm sau quầy refill canh cải nóng hơn một chút!'
   );
-  const [attachedPhotos, setAttachedPhotos] = useState<string[]>([
-    'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&auto=format&fit=crop&q=80',
-  ]);
+  const [attachedPhotos, setAttachedPhotos] = useState<string[]>([]);
   const [showPhotoModal, setShowPhotoModal] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'RESPONDED' | 'PENDING'>('ALL');
+  const [isLoadingFeedbacks, setIsLoadingFeedbacks] = useState<boolean>(false);
+
+  const initialFeedbacksEmptyRef = React.useRef(!myFeedbacks || myFeedbacks.length === 0);
+  const refreshFeedbacksRef = React.useRef(refreshFeedbacks);
+  React.useEffect(() => {
+    refreshFeedbacksRef.current = refreshFeedbacks;
+  });
+
+  React.useEffect(() => {
+    let active = true;
+    if (initialFeedbacksEmptyRef.current) {
+      setIsLoadingFeedbacks(true);
+      Promise.resolve(refreshFeedbacksRef.current()).finally(() => {
+        if (active) setIsLoadingFeedbacks(false);
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useModalScrollLock(showPhotoModal);
-
-  const studentTags = [
-    'Ngon miệng',
-    'Rất hài lòng',
-    'Nhanh nhẹn & Thân thiện',
-    'Cơm dẻo nóng',
-    'Đúng giờ',
-    'Khay sạch sẽ',
-    'Canh hơi nguội',
-    'Nêm hơi nhạt',
-  ];
-
-  const parentTags = [
-    'Món ăn nóng sốt',
-    'Khay cơm sạch sẽ',
-    'Khẩu phần vừa vặn',
-    'Cần thêm rau xanh',
-    'Cần giữ ấm canh hơn',
-    'Đảm bảo vệ sinh ATTP',
-    'Phục vụ chu đáo & thân thiện',
-    'Đề xuất bổ sung món mới',
-  ];
-
-  const availableTags = currentRole === 'PARENT' ? parentTags : studentTags;
 
   const samplePhotos = [
     {
@@ -85,14 +69,6 @@ export const FeedbackPage: React.FC = () => {
     },
   ];
 
-  const toggleTag = (tag: string) => {
-    if (selectedTags.includes(tag)) {
-      setSelectedTags(selectedTags.filter((t) => t !== tag));
-    } else {
-      setSelectedTags([...selectedTags, tag]);
-    }
-  };
-
   const handleAddPhoto = (url: string) => {
     if (!attachedPhotos.includes(url)) {
       setAttachedPhotos([...attachedPhotos, url]);
@@ -106,7 +82,7 @@ export const FeedbackPage: React.FC = () => {
 
   const handleSubmitFeedback = async () => {
     if (!comment.trim()) {
-      alert('Vui lòng nhập lời nhận xét hoặc góp ý của bạn');
+      void showAlert('Vui lòng nhập lời nhận xét hoặc góp ý của bạn.');
       return;
     }
 
@@ -117,17 +93,14 @@ export const FeedbackPage: React.FC = () => {
       await api.post('/feedbacks', {
         canteenId,
         rating,
-        tags: selectedTags,
         comment,
         photos: attachedPhotos,
       });
 
       setSubmitSuccess(true);
-      await refreshUserData();
-      setTimeout(() => setSubmitSuccess(false), 3000);
-    } catch (err: any) {
+      await Promise.all([refreshUserData(), refreshFeedbacks()]);
+    } catch {
       setSubmitSuccess(true);
-      setTimeout(() => setSubmitSuccess(false), 3000);
     } finally {
       setIsSubmitting(false);
     }
@@ -167,25 +140,35 @@ export const FeedbackPage: React.FC = () => {
   });
 
   return (
-    <div className="p-4 space-y-3.5 pb-28 bg-[#F7FAFE] min-h-screen">
+    <div className="px-3.5 pt-3 sm:px-5 sm:pt-4 space-y-3.5 pb-28 bg-[#F7FAFE] min-h-screen">
       {/* 1. CSAT FEEDBACK FORM CONTAINER (Clean & Minimalist) */}
-      <div className="bg-white rounded-3xl p-4.5 border border-slate-200/80 shadow-2xs space-y-3.5">
-        {/* Header */}
-        <div className="text-center space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[#0057b8] bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100/60">
-            {currentRole === 'PARENT' ? 'GÓP Ý & YÊU CẦU PHỤ HUYNH' : 'ĐÁNH GIÁ CHẤT LƯỢNG (CSAT)'}
-          </span>
-          <h3 className="text-base font-bold text-slate-900">
-            {currentRole === 'PARENT'
-              ? 'Góp ý & Nhận xét về Canteen trường của con'
-              : 'Bạn thấy bữa ăn hôm nay thế nào?'}
-          </h3>
-          <p className="text-xs text-slate-500">
-            {currentRole === 'PARENT'
-              ? `Gửi trực tiếp đến Canteen ${selectedCanteen?.name || selectedChild?.canteenName || 'trường'}. Ban Quản lý sẽ tiếp nhận và phản hồi sớm nhất.`
-              : 'Ý kiến của bạn giúp Bếp Canteen nâng cao chất lượng mỗi ngày'}
-          </p>
+      {submitSuccess ? (
+        <div className="bg-white rounded-3xl p-4.5 border border-slate-200/80 shadow-2xs">
+          <FeedbackSuccessNotice
+            className="py-6"
+            action={
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmitSuccess(false);
+                  setComment('');
+                  setAttachedPhotos([]);
+                }}
+                className="px-4 py-2 rounded-xl bg-[#EFF6FF] hover:bg-blue-100/70 text-[#0057b8] text-xs font-bold transition cursor-pointer"
+              >
+                Gửi đánh giá khác
+              </button>
+            }
+          />
         </div>
+      ) : (
+        <div className="bg-white rounded-3xl p-4.5 border border-slate-200/80 shadow-2xs space-y-3.5">
+        {/* Header */}
+        <h3 className="text-center text-base font-bold text-slate-900">
+          {currentRole === 'PARENT'
+            ? 'Góp ý & Nhận xét về Canteen trường của con'
+            : 'Bạn thấy bữa ăn hôm nay thế nào?'}
+        </h3>
 
         {/* 5-Star Interactive Rating */}
         <div className="flex flex-col items-center justify-center gap-1.5 py-1">
@@ -214,31 +197,6 @@ export const FeedbackPage: React.FC = () => {
             {rating === 2 && 'Cần cải thiện chất lượng'}
             {rating === 1 && 'Chưa hài lòng với bữa ăn'}
           </span>
-        </div>
-
-        {/* Quick Review Tags */}
-        <div className="space-y-1.5">
-          <span className="text-[11px] font-semibold text-slate-600">Chọn nhanh cảm nhận:</span>
-          <div className="flex flex-wrap gap-1.5">
-            {availableTags.map((tag) => {
-              const isSelected = selectedTags.includes(tag);
-              return (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => toggleTag(tag)}
-                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-xl border transition-all cursor-pointer active:scale-95 ${
-                    isSelected
-                      ? 'border-[#0057b8] bg-blue-50/70 text-[#0057b8] ring-1 ring-[#0057b8]/20'
-                      : 'border-slate-200/80 bg-white text-slate-600 hover:border-slate-300'
-                  }`}
-                >
-                  {isSelected && '✓ '}
-                  {tag}
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         {/* Comment Textarea */}
@@ -286,19 +244,13 @@ export const FeedbackPage: React.FC = () => {
           type="button"
           disabled={isSubmitting}
           onClick={handleSubmitFeedback}
-          className="w-full py-3 rounded-2xl bg-[#0057b8] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs hover:bg-[#004593] active:scale-95 transition cursor-pointer"
+          className="w-full py-3 rounded-2xl bg-[#0057b8] hover:bg-[#004593] active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition cursor-pointer disabled:opacity-60"
         >
           <Send className="w-4 h-4" />
-          <span>{isSubmitting ? 'Đang gửi phản hồi...' : 'Gửi Đánh Giá CSAT'}</span>
+          <span>{isSubmitting ? 'Đang gửi...' : 'Gửi Đánh Giá'}</span>
         </button>
-
-        {submitSuccess && (
-          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>Đã ghi nhận phản hồi! Cảm ơn đóng góp quý giá của bạn.</span>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 2. PAST FEEDBACKS LIST */}
       <div className="bg-white rounded-3xl p-4 border border-slate-200/80 shadow-2xs space-y-3">
@@ -325,7 +277,24 @@ export const FeedbackPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="space-y-3">
+        {isLoadingFeedbacks && (!myFeedbacks || myFeedbacks.length === 0) ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-pulse">
+            {[1, 2].map((i) => (
+              <div key={i} className="p-3 rounded-2xl border border-slate-200/80 bg-white space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="w-28 h-3 bg-slate-200 rounded" />
+                  <div className="w-16 h-4 bg-slate-100 rounded-full" />
+                </div>
+                <div className="w-40 h-2.5 bg-slate-100 rounded" />
+                <div className="space-y-1.5">
+                  <div className="w-full h-3 bg-slate-200 rounded" />
+                  <div className="w-3/4 h-3 bg-slate-100 rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {filteredFeedbacks.map((fb: any) => (
             <div key={fb.id} className="p-3 rounded-2xl border border-[#E2E8F0] bg-white space-y-2">
               <div className="flex items-center justify-between">
@@ -346,7 +315,7 @@ export const FeedbackPage: React.FC = () => {
                 <span
                   className={`text-[9.5px] font-bold px-2 py-0.5 rounded-full border ${
                     fb.status === 'RESPONDED'
-                      ? 'bg-[#EFF6FF] text-[#0057b8] border-[#0057b8]/20'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                       : 'bg-slate-100 text-slate-600 border-slate-200'
                   }`}
                 >
@@ -355,7 +324,7 @@ export const FeedbackPage: React.FC = () => {
               </div>
 
               {fb.meal && (
-                <p className="text-[10.5px] font-bold text-[#0057b8]">{fb.meal}</p>
+                <p className="text-[10.5px] font-semibold text-slate-600">{fb.meal}</p>
               )}
 
               <p className="text-xs text-[#131B2E] leading-relaxed">{fb.comment}</p>
@@ -375,19 +344,20 @@ export const FeedbackPage: React.FC = () => {
 
               {/* Staff Response Card */}
               {fb.reply && (
-                <div className="mt-2 p-2.5 rounded-xl bg-[#EFF6FF] border border-[#D0E7FF] text-xs space-y-1">
+                <div className="mt-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-[#003E82] text-[10.5px]">
+                    <span className="font-bold text-slate-800 text-[10.5px]">
                       Quản lý Canteen phản hồi:
                     </span>
                     <span className="text-[9.5px] text-slate-400">{fb.replyDate || 'Vừa xong'}</span>
                   </div>
-                  <p className="text-slate-700 text-[11px] leading-relaxed">{fb.reply}</p>
+                  <p className="text-slate-600 text-[11px] leading-relaxed">{fb.reply}</p>
                 </div>
               )}
             </div>
           ))}
         </div>
+        )}
       </div>
 
       {/* SAMPLE PHOTO PICKER MODAL */}
@@ -396,9 +366,9 @@ export const FeedbackPage: React.FC = () => {
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowPhotoModal(false);
           }}
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[60] flex items-end justify-center"
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150"
         >
-          <div className="w-full max-w-md bg-white rounded-t-3xl p-5 space-y-3 max-h-[85vh] overflow-y-auto overscroll-contain modal-scrollable touch-pan-y">
+          <div className="w-full max-w-sm bg-white rounded-2xl p-4 sm:p-5 space-y-3 max-h-[85vh] overflow-y-auto overscroll-contain modal-scrollable touch-pan-y animate-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Camera className="w-5 h-5 text-[#0057b8]" />

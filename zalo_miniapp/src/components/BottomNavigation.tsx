@@ -1,17 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  UtensilsCrossed,
-  Wallet,
-  QrCode,
-  Star,
-  User,
-  Users,
-  BookOpen,
-  ScanLine,
-  ChefHat,
-  MessageSquareHeart,
-  LayoutDashboard,
-} from 'lucide-react';
+  ForkKnifeIcon as UtensilsCrossed,
+  WalletIcon as Wallet,
+  QrCodeIcon as QrCode,
+  StarIcon as Star,
+  UserIcon as User,
+  UsersIcon as Users,
+  BookOpenIcon as BookOpen,
+  ScanIcon as ScanLine,
+  ChatCircleDotsIcon as MessageSquareHeart,
+  SquaresFourIcon as LayoutDashboard,
+} from '@phosphor-icons/react';
 import { useApp } from '../context/AppContext';
 
 export type TabKey =
@@ -36,12 +35,11 @@ interface BottomNavigationProps {
 }
 
 export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, onChangeTab }) => {
-  const { currentRole, servingQueue, branchFeedbacks, activeOrders } = useApp();
+  const { currentRole, branchFeedbacks, activeOrders } = useApp();
 
-  const waitingServingCount = servingQueue?.waitingQueue?.length || 0;
   const pendingFeedbacksCount = branchFeedbacks?.filter((f) => f.status === 'PENDING')?.length || 0;
 
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const [todayStr] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }));
   const pendingOrdersToday = activeOrders?.filter((o) => {
     if (o.status !== 'PENDING' && o.status !== 'CONFIRMED') return false;
     const ordDate = o.orderDate
@@ -51,16 +49,13 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
   }) || [];
   const hasPendingOrder = pendingOrdersToday.length > 0;
 
-  // Active theme color (Cheero Blue: #0057b8)
-  const primaryColor = '#0057b8';
-
   // ==========================================
   // STUDENT ROLE: 5 TABS WITH ELEVATED QR BUTTON (Clean & Minimalist)
   // ==========================================
   if (currentRole === 'STUDENT') {
     return (
       <nav
-        className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-[0_-4px_20px_rgba(15,23,42,0.04)] z-40 safe-bottom"
+        className="fixed bottom-0 left-0 right-0 max-w-lg sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-[0_-4px_20px_rgba(15,23,42,0.04)] z-40 safe-bottom"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <div className="flex items-center justify-around h-[62px] px-1 relative">
@@ -72,7 +67,10 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
               activeTab === 'menu' ? 'text-[#0057b8] font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
-            <UtensilsCrossed className={`w-5 h-5 transition-transform ${activeTab === 'menu' ? 'stroke-[2.5px] scale-105' : 'stroke-[1.75px]'}`} />
+            <UtensilsCrossed
+              weight={activeTab === 'menu' ? 'fill' : 'regular'}
+              className={`w-5 h-5 transition-transform ${activeTab === 'menu' ? 'scale-105' : ''}`}
+            />
             <span className="text-[10px] mt-1 tracking-tight">Đặt món</span>
           </button>
 
@@ -84,7 +82,10 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
               activeTab === 'wallet' ? 'text-[#0057b8] font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
-            <Wallet className={`w-5 h-5 transition-transform ${activeTab === 'wallet' ? 'stroke-[2.5px] scale-105' : 'stroke-[1.75px]'}`} />
+            <Wallet
+              weight={activeTab === 'wallet' ? 'fill' : 'regular'}
+              className={`w-5 h-5 transition-transform ${activeTab === 'wallet' ? 'scale-105' : ''}`}
+            />
             <span className="text-[10px] mt-1 tracking-tight">Ví Canteen</span>
           </button>
 
@@ -98,7 +99,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
               }`}
               title="QR Nhận Suất Ăn"
             >
-              <QrCode className="w-6 h-6 stroke-[2.2px]" />
+              <QrCode weight="bold" className="w-6 h-6" />
               {hasPendingOrder && (
                 <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 text-white text-[9px] font-black rounded-full border-2 border-white flex items-center justify-center shadow-xs">
                   {pendingOrdersToday.length}
@@ -122,7 +123,10 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
               activeTab === 'feedback' ? 'text-[#0057b8] font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
-            <Star className={`w-5 h-5 transition-transform ${activeTab === 'feedback' ? 'fill-amber-400 text-amber-500 scale-105' : 'stroke-[1.75px]'}`} />
+            <Star
+              weight={activeTab === 'feedback' ? 'fill' : 'regular'}
+              className={`w-5 h-5 transition-transform ${activeTab === 'feedback' ? 'text-amber-500 scale-105' : ''}`}
+            />
             <span className="text-[10px] mt-1 tracking-tight">Đánh giá</span>
           </button>
 
@@ -134,7 +138,10 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
               activeTab === 'profile' ? 'text-[#0057b8] font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
-            <User className={`w-5 h-5 transition-transform ${activeTab === 'profile' ? 'stroke-[2.5px] scale-105' : 'stroke-[1.75px]'}`} />
+            <User
+              weight={activeTab === 'profile' ? 'fill' : 'regular'}
+              className={`w-5 h-5 transition-transform ${activeTab === 'profile' ? 'scale-105' : ''}`}
+            />
             <span className="text-[10px] mt-1 tracking-tight">Tài khoản</span>
           </button>
         </div>
@@ -148,7 +155,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
   if (currentRole === 'PARENT') {
     return (
       <nav
-        className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-[0_-4px_20px_rgba(15,23,42,0.04)] z-40 safe-bottom"
+        className="fixed bottom-0 left-0 right-0 max-w-lg sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-[0_-4px_20px_rgba(15,23,42,0.04)] z-40 safe-bottom"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <div className="flex items-center justify-around h-[62px] px-1">
@@ -160,7 +167,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
               activeTab === 'children' ? 'text-[#0057b8] font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
-            <Users className={`w-5 h-5 transition-transform ${activeTab === 'children' ? 'stroke-[2.5px] scale-105' : 'stroke-[1.75px]'}`} />
+            <Users weight={activeTab === 'children' ? 'fill' : 'regular'} className={`w-5 h-5 transition-transform ${activeTab === 'children' ? 'scale-105' : ''}`} />
             <span className="text-[10px] mt-1 tracking-tight">Theo dõi con</span>
           </button>
 
@@ -172,7 +179,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
               activeTab === 'parent_menu' ? 'text-[#0057b8] font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
-            <BookOpen className={`w-5 h-5 transition-transform ${activeTab === 'parent_menu' ? 'stroke-[2.5px] scale-105' : 'stroke-[1.75px]'}`} />
+            <BookOpen weight={activeTab === 'parent_menu' ? 'fill' : 'regular'} className={`w-5 h-5 transition-transform ${activeTab === 'parent_menu' ? 'scale-105' : ''}`} />
             <span className="text-[10px] mt-1 tracking-tight">Thực đơn</span>
           </button>
 
@@ -184,7 +191,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
               activeTab === 'parent_wallet' ? 'text-[#0057b8] font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
-            <Wallet className={`w-5 h-5 transition-transform ${activeTab === 'parent_wallet' ? 'stroke-[2.5px] scale-105' : 'stroke-[1.75px]'}`} />
+            <Wallet weight={activeTab === 'parent_wallet' ? 'fill' : 'regular'} className={`w-5 h-5 transition-transform ${activeTab === 'parent_wallet' ? 'scale-105' : ''}`} />
             <span className="text-[10px] mt-1 tracking-tight">Nạp ví</span>
           </button>
 
@@ -196,7 +203,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
               activeTab === 'feedback' ? 'text-[#0057b8] font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
-            <MessageSquareHeart className={`w-5 h-5 transition-transform ${activeTab === 'feedback' ? 'stroke-[2.5px] scale-105' : 'stroke-[1.75px]'}`} />
+            <MessageSquareHeart weight={activeTab === 'feedback' ? 'fill' : 'regular'} className={`w-5 h-5 transition-transform ${activeTab === 'feedback' ? 'scale-105' : ''}`} />
             <span className="text-[10px] mt-1 tracking-tight">Góp ý</span>
           </button>
 
@@ -208,7 +215,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
               activeTab === 'profile' ? 'text-[#0057b8] font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
             }`}
           >
-            <User className={`w-5 h-5 transition-transform ${activeTab === 'profile' ? 'stroke-[2.5px] scale-105' : 'stroke-[1.75px]'}`} />
+            <User weight={activeTab === 'profile' ? 'fill' : 'regular'} className={`w-5 h-5 transition-transform ${activeTab === 'profile' ? 'scale-105' : ''}`} />
             <span className="text-[10px] mt-1 tracking-tight">Cá nhân</span>
           </button>
         </div>
@@ -221,7 +228,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
   // ==========================================
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-[0_-4px_20px_rgba(15,23,42,0.04)] z-40 safe-bottom"
+      className="fixed bottom-0 left-0 right-0 max-w-lg sm:max-w-2xl md:max-w-3xl lg:max-w-4xl mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-[0_-4px_20px_rgba(15,23,42,0.04)] z-40 safe-bottom"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       <div className="flex items-center justify-around h-[62px] px-1">
@@ -233,7 +240,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
             activeTab === 'overview' ? 'text-[#0057b8] font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
           }`}
         >
-          <LayoutDashboard className={`w-5 h-5 transition-transform ${activeTab === 'overview' ? 'stroke-[2.5px] scale-105' : 'stroke-[1.75px]'}`} />
+          <LayoutDashboard weight={activeTab === 'overview' ? 'fill' : 'regular'} className={`w-5 h-5 transition-transform ${activeTab === 'overview' ? 'scale-105' : ''}`} />
           <span className="text-[10px] mt-1 tracking-tight">Tổng quan</span>
         </button>
 
@@ -245,7 +252,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
             activeTab === 'staff_menu' ? 'text-[#0057b8] font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
           }`}
         >
-          <UtensilsCrossed className={`w-5 h-5 transition-transform ${activeTab === 'staff_menu' ? 'stroke-[2.5px] scale-105' : 'stroke-[1.75px]'}`} />
+          <UtensilsCrossed weight={activeTab === 'staff_menu' ? 'fill' : 'regular'} className={`w-5 h-5 transition-transform ${activeTab === 'staff_menu' ? 'scale-105' : ''}`} />
           <span className="text-[10px] mt-1 tracking-tight">Thực đơn</span>
         </button>
 
@@ -257,7 +264,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
             activeTab === 'scan' ? 'text-[#0057b8] font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
           }`}
         >
-          <ScanLine className={`w-5 h-5 transition-transform ${activeTab === 'scan' ? 'stroke-[2.5px] scale-105' : 'stroke-[1.75px]'}`} />
+          <ScanLine weight={activeTab === 'scan' ? 'bold' : 'regular'} className={`w-5 h-5 transition-transform ${activeTab === 'scan' ? 'scale-105' : ''}`} />
           <span className="text-[10px] mt-1 tracking-tight">Quét QR</span>
         </button>
 
@@ -269,7 +276,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
             activeTab === 'users' ? 'text-[#0057b8] font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
           }`}
         >
-          <Users className={`w-5 h-5 transition-transform ${activeTab === 'users' ? 'stroke-[2.5px] scale-105' : 'stroke-[1.75px]'}`} />
+          <Users weight={activeTab === 'users' ? 'fill' : 'regular'} className={`w-5 h-5 transition-transform ${activeTab === 'users' ? 'scale-105' : ''}`} />
           <span className="text-[10px] mt-1 tracking-tight">Người dùng</span>
         </button>
 
@@ -282,7 +289,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
           }`}
         >
           <div className="relative">
-            <MessageSquareHeart className={`w-5 h-5 transition-transform ${activeTab === 'feedbacks' ? 'stroke-[2.5px] scale-105' : 'stroke-[1.75px]'}`} />
+            <MessageSquareHeart weight={activeTab === 'feedbacks' ? 'fill' : 'regular'} className={`w-5 h-5 transition-transform ${activeTab === 'feedbacks' ? 'scale-105' : ''}`} />
             {pendingFeedbacksCount > 0 && (
               <span className="absolute -top-1 -right-2 bg-rose-500 text-white text-[9px] font-bold min-w-4 h-4 px-1 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
                 {pendingFeedbacksCount}

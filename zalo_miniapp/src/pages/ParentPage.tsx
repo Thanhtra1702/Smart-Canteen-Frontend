@@ -1,42 +1,31 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useApp, type ChildItem } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 import type { TabKey } from '../components/BottomNavigation';
-import { DishDetailModal } from '../components/DishDetailModal';
 import { FeedbackModal } from '../components/FeedbackModal';
+import { DishImage } from '../components/DishImage';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import {
-  Users,
-  CreditCard,
-  Bell,
-  MessageSquareHeart,
-  Send,
-  Star,
-  Utensils,
-  PlusCircle,
-  X,
-  CheckCircle2,
-  Copy,
-  Check,
-  ChevronRight,
-  Sparkles,
-  Calendar,
-  Building2,
-  Clock,
-  Heart,
-  QrCode,
-  ArrowLeft,
-  Info,
-  Lock,
-  ShieldCheck,
-} from 'lucide-react';
+  UsersIcon as Users,
+  CreditCardIcon as CreditCard,
+  ChatCircleDotsIcon as MessageSquareHeart,
+  ForkKnifeIcon as Utensils,
+  PlusCircleIcon as PlusCircle,
+  XIcon as X,
+  CheckCircleIcon as CheckCircle2,
+  CopyIcon as Copy,
+  CheckIcon as Check,
+  CaretRightIcon as ChevronRight,
+  QrCodeIcon as QrCode,
+  InfoIcon as Info,
+} from '@phosphor-icons/react';
 
 interface ParentPageProps {
   activeSubTab?: TabKey;
   onNavigateTab: (tab: TabKey) => void;
 }
 
-export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children', onNavigateTab }) => {
+export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children', onNavigateTab: _onNavigateTab }) => {
   const {
     refreshChildren,
     childrenList,
@@ -47,12 +36,15 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
     selectedCanteen,
     selectedMealType,
     setSelectedMealType,
+    showAlert,
+    showConfirm,
   } = useApp();
 
   // Modals state
+  const [mountNow] = useState(() => Date.now());
+  const [todayDisplayStr] = useState(() => new Date().toLocaleDateString('vi-VN'));
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showTopupModal, setShowTopupModal] = useState(false);
-  const [selectedDishForDetail, setSelectedDishForDetail] = useState<any | null>(null);
   const [selectedOrderForDetail, setSelectedOrderForDetail] = useState<any | null>(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
@@ -66,7 +58,7 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
       if (Array.isArray(res.data)) {
         setPendingRequests(res.data);
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
   }, []);
@@ -90,23 +82,30 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
         setPayingRequest(null);
       }, 1800);
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Lỗi khi thanh toán yêu cầu');
+      void showAlert(err.response?.data?.message || 'Lỗi khi thanh toán yêu cầu', 'Lỗi');
     } finally {
       setIsProcessingRequest(false);
     }
   };
 
   const handleRejectRequest = async (reqToReject: any) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn từ chối yêu cầu của bé ${reqToReject.student?.fullName || ''}?`)) return;
+    const confirmed = await showConfirm({
+      title: 'Từ chối yêu cầu',
+      message: `Bạn có chắc chắn muốn từ chối yêu cầu của bé ${reqToReject.student?.fullName || ''}?`,
+      confirmText: 'Từ chối',
+      cancelText: 'Hủy',
+      danger: true,
+    });
+    if (!confirmed) return;
     try {
       await api.post(`/parent/requests/${reqToReject.id}/reject`);
       await fetchParentRequests();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Lỗi khi từ chối yêu cầu');
+      void showAlert(err.response?.data?.message || 'Lỗi khi từ chối yêu cầu', 'Lỗi');
     }
   };
 
-  useModalScrollLock(showLinkModal || showTopupModal || showFeedbackModal || !!selectedDishForDetail || !!selectedOrderForDetail);
+  useModalScrollLock(showLinkModal || showTopupModal || showFeedbackModal || !!selectedOrderForDetail || !!payingRequest);
 
   // Link child form state
   const [inputStudentCode, setInputStudentCode] = useState('');
@@ -121,12 +120,13 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
   const [topupSuccessMsg, setTopupSuccessMsg] = useState<string | null>(null);
   const [topupLoading, setTopupLoading] = useState(false);
 
-  // Menu state for parent_menu
+  // Menu & packages state
   const [todayMenuDishes, setTodayMenuDishes] = useState<any[]>([]);
   const [loadingMenu, setLoadingMenu] = useState(false);
+  const [canteenPackages, setCanteenPackages] = useState<any[]>([]);
+  const [loadingPackages, setLoadingPackages] = useState(false);
 
-  // Real-time Meal Notification Alert state
-  const [dismissedAlerts, setDismissedAlerts] = useState<Record<string, boolean>>({});
+  // Real-time Meal chime tracking
   const prevServedRef = useRef<Record<string, boolean>>({});
 
   // Audio chime for real-time meal served notification
@@ -146,7 +146,7 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.5);
-    } catch (e) {
+    } catch {
       // Audio playback silently ignored if autoplay policy restricts
     }
   }, []);
@@ -230,6 +230,58 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
     fetchMenu();
   }, [selectedCanteen?.id, selectedMealType]);
 
+  // Load canteen meal packages so parents know exact package prices when topping up
+  useEffect(() => {
+    const fetchPackages = async () => {
+      const fallbackPackages = [
+        {
+          id: 'pkg-default-1',
+          name: 'Gói Tiêu Chuẩn 60 Suất',
+          price: 1680000,
+          totalCredits: 60,
+          durationDays: 30,
+          includesBreakfast: false,
+        },
+        {
+          id: 'pkg-default-2',
+          name: 'Gói Toàn Diện 90 Suất',
+          price: 2280000,
+          totalCredits: 90,
+          durationDays: 30,
+          includesBreakfast: true,
+        },
+        {
+          id: 'pkg-default-3',
+          name: 'Gói 20 Suất Linh Hoạt',
+          price: 600000,
+          totalCredits: 20,
+          durationDays: 45,
+          includesBreakfast: false,
+        },
+      ];
+      try {
+        setLoadingPackages(true);
+        const params: Record<string, string> = {};
+        if (selectedCanteen?.id && selectedCanteen.id !== 'ALL') {
+          params.canteenId = selectedCanteen.id;
+        }
+        const res = await api.get('/packages', { params });
+        if (Array.isArray(res.data) && res.data.length > 0) {
+          setCanteenPackages(res.data);
+        } else {
+          setCanteenPackages(fallbackPackages);
+        }
+      } catch (err) {
+        console.warn('Lỗi tải gói ăn cơ sở:', err);
+        setCanteenPackages(fallbackPackages);
+      } finally {
+        setLoadingPackages(false);
+      }
+    };
+
+    fetchPackages();
+  }, [selectedCanteen?.id]);
+
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedText(text);
@@ -253,18 +305,19 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
     }
   };
 
-  const openTopupModal = () => {
+  const openTopupModal = (presetAmount?: number) => {
     setTopupStep('SELECT_AMOUNT');
-    setCustomTopupAmount('');
+    setCustomTopupAmount(typeof presetAmount === 'number' && presetAmount > 0 ? String(presetAmount) : '');
     setShowTopupModal(true);
   };
 
   const effectiveTopupAmount = customTopupAmount ? Math.max(10000, Number(customTopupAmount) || topupAmount) : topupAmount;
 
   const handleQuickTopupConfirm = async () => {
-    if (!selectedChild) return;
+    const targetChild = selectedChild || childrenList[0];
+    if (!targetChild) return;
     setTopupLoading(true);
-    const res = await topupChild(selectedChild.studentId, effectiveTopupAmount);
+    const res = await topupChild(targetChild.studentId, effectiveTopupAmount);
     setTopupLoading(false);
     setTopupSuccessMsg(res.message);
     setTimeout(() => {
@@ -285,531 +338,303 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
   )}&accountName=${encodeURIComponent(selectedCanteen?.bankAccountName || selectedCanteen?.name || 'CANTEEN FPT')}`;
 
   return (
-<div className="p-4 space-y-4 pb-28 bg-[#F7FAFE] min-h-screen">
+<div className="p-3.5 sm:p-5 space-y-3.5 pb-28 bg-[#F7FAFE] min-h-screen">
       
-      {/* PENDING PAYMENT REQUESTS FROM CON */}
-      {pendingRequests.filter((r) => r.status === 'PENDING').length > 0 && (
-        <div className="bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border-2 border-amber-400 rounded-3xl p-4 shadow-md space-y-3 animate-in slide-in-from-top duration-300">
-          <div className="flex items-center justify-between border-b border-amber-200/70 pb-2">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-sm shadow-xs animate-bounce">
-                🔔
-              </div>
-              <div>
-                <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">
-                  Yêu cầu thanh toán từ con ({pendingRequests.filter((r) => r.status === 'PENDING').length})
-                </h4>
-                <p className="text-[11px] text-amber-800 font-medium">
-                  Bé vừa gửi yêu cầu duyệt nạp tiền / mua suất ăn
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2.5">
-            {pendingRequests
-              .filter((r) => r.status === 'PENDING')
-              .map((req) => (
-                <div
-                  key={req.id}
-                  className="bg-white rounded-2xl p-3.5 border border-amber-200/80 shadow-xs space-y-2.5"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full">
-                        {req.type === 'PACKAGE' ? 'MUA GÓI BÁN TRÚ' : 'NẠP SỐ DƯ VÍ'}
-                      </span>
-                      <h5 className="text-xs font-bold text-slate-900 mt-1">
-                        Bé: <span className="text-[#0057b8]">{req.student?.fullName || 'Con em'}</span>
-                      </h5>
-                      <p className="text-xs font-black text-[#0057b8] mt-0.5">
-                        Số tiền: {Number(req.amount).toLocaleString('vi-VN')} đ
-                        {req.type === 'PACKAGE' && req.packageName ? ` (${req.packageName})` : ''}
-                      </p>
-                    </div>
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      {new Date(req.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-
-                  {req.note && (
-                    <div className="p-2 bg-amber-50/70 rounded-xl border border-amber-200/60 text-[11px] text-amber-900 italic">
-                      "{req.note}"
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setPayingRequest(req)}
-                      className="flex-1 py-2 px-3 bg-[#0057b8] hover:bg-[#004593] text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                    >
-                      <CreditCard className="w-3.5 h-3.5" />
-                      <span>Duyệt & Thanh Toán</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRejectRequest(req)}
-                      className="py-2 px-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 rounded-xl text-xs font-bold transition cursor-pointer"
-                    >
-                      Từ chối
-                    </button>
-                  </div>
+      {currentView === 'children' && (
+        <>
+          {/* PENDING PAYMENT REQUESTS */}
+          {pendingRequests.filter((r) => r.status === 'PENDING').length > 0 && (
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between px-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  <h4 className="text-xs font-bold text-slate-800">Yêu cầu chờ duyệt</h4>
                 </div>
-              ))}
-          </div>
-        </div>
-      )}
-
-      {/* REAL-TIME MEAL SERVED NOTIFICATION BANNER */}
-
-      {/* 1. REAL-TIME MEAL SERVED NOTIFICATION BANNER (CLEAN & AIRY) */}
-      {activeChild?.latestMealAlert && !dismissedAlerts[activeChild.latestMealAlert.orderId] && (
-        <div className="bg-emerald-50/95 border border-emerald-200/90 rounded-3xl p-4.5 shadow-2xs space-y-3 animate-in slide-in-from-top duration-300">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="relative mt-0.5 shrink-0">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-                  <Bell className="w-5 h-5 animate-bounce" />
-                </div>
-                <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-white" />
+                <span className="text-[11px] font-bold text-[#0057b8] bg-[#EFF6FF] px-2 py-0.5 rounded-full">
+                  {pendingRequests.filter((r) => r.status === 'PENDING').length}
                 </span>
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-600 text-white px-2 py-0.5 rounded-full">
-                    Bữa ăn hoàn tất
-                  </span>
-                  <span className="text-xs font-mono font-bold text-emerald-800">
-                    {activeChild.latestMealAlert.servedTime || 'Vừa nhận khay'}
-                  </span>
-                </div>
-                <h4 className="text-sm font-bold text-slate-900 mt-1 leading-snug">
-                  Bé {activeChild.fullName} đã nhận suất ăn tại Canteen!
-                </h4>
-                <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                  {activeChild.latestMealAlert.message}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                setDismissedAlerts((prev) => ({
-                  ...prev,
-                  [activeChild.latestMealAlert!.orderId]: true,
-                }))
-              }
-              className="w-7 h-7 rounded-full bg-emerald-100/80 hover:bg-emerald-200 text-emerald-700 flex items-center justify-center transition shrink-0 cursor-pointer"
-              title="Đóng thông báo"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
 
-          {activeChild.todayOrders && activeChild.todayOrders[0] && (
-            <div className="pt-2.5 border-t border-emerald-200/60 flex items-center justify-between text-xs gap-2">
-              <span className="text-slate-600 text-[11px] truncate flex items-center gap-1.5 min-w-0">
-                <Utensils className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span className="truncate">Khay cơm: {activeChild.latestMealAlert.itemsSummary}</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedOrderForDetail(activeChild.todayOrders![0])}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-[11px] shadow-2xs transition cursor-pointer flex items-center gap-1 shrink-0 active:scale-95"
-              >
-                Chi tiết khay <ChevronRight className="w-3.5 h-3.5" />
-              </button>
+              <div className="space-y-2.5">
+                {pendingRequests
+                  .filter((r) => r.status === 'PENDING')
+                  .map((req) => {
+                    const studentName = req.student?.fullName || 'Con em';
+                    return (
+                      <div
+                        key={req.id}
+                        className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-2xs space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-9 h-9 rounded-full bg-[#EFF6FF] text-[#0057b8] ring-1 ring-[#0057b8]/10 flex items-center justify-center font-bold text-xs shrink-0">
+                              {studentName.charAt(0)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[13px] font-bold text-slate-900 truncate">{studentName}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-md truncate max-w-[140px]">
+                                  {req.type === 'PACKAGE' ? req.packageName || 'Gói bán trú' : 'Nạp ví'}
+                                </span>
+                                <span className="text-[10px] text-slate-400 tabular-nums shrink-0">
+                                  {new Date(req.createdAt).toLocaleTimeString('vi-VN', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <span className="text-sm font-extrabold text-[#0057b8] tabular-nums tracking-tight shrink-0">
+                            {Number(req.amount).toLocaleString('vi-VN')}đ
+                          </span>
+                        </div>
+
+                        {req.note && (
+                          <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs text-slate-600 leading-relaxed">
+                            “{req.note}”
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleRejectRequest(req)}
+                            className="h-9 px-3.5 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 rounded-xl text-xs font-semibold transition cursor-pointer active:scale-[0.98]"
+                          >
+                            Từ chối
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPayingRequest(req)}
+                            className="flex-1 h-9 px-4 bg-[#0057b8] hover:bg-[#004593] text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs active:scale-[0.98]"
+                          >
+                            Duyệt & Thanh toán
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* 2. TOP CHILD SELECTOR CARDS (AIRY HORIZONTAL RAIL) */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 p-4 shadow-2xs space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center">
-              <Users className="w-4 h-4" />
-            </div>
-            <h3 className="text-xs font-bold text-slate-900 tracking-tight">Hồ sơ con em ({childrenList.length})</h3>
-          </div>
-          <button
-            onClick={() => setShowLinkModal(true)}
-            className="text-[11px] font-bold text-[#0057b8] hover:text-[#003E82] bg-[#EFF6FF] hover:bg-blue-100/70 border border-[#0057b8]/20 px-3 py-1 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>Thêm con</span>
-          </button>
-        </div>
-
-        {childrenList.length === 0 ? (
-          <div className="p-6 bg-slate-50/60 border border-dashed border-slate-200 rounded-2xl text-center space-y-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-white text-slate-400 flex items-center justify-center mx-auto border border-slate-200/80">
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-slate-800">Chưa có tài khoản con em nào được liên kết</p>
-              <p className="text-[11px] text-slate-500 mt-0.5">Nhập mã học sinh của con để theo dõi bữa ăn và nạp ví</p>
-            </div>
-            <button
-              onClick={() => setShowLinkModal(true)}
-              className="py-2 px-4 bg-[#0057b8] hover:bg-[#003E82] text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95 transition"
-            >
-              <PlusCircle className="w-3.5 h-3.5" />
-              Liên kết con em ngay
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar pb-1">
-            {childrenList.map((child) => {
-              const isSelected = activeChild?.studentId === child.studentId;
-              const isServed = child.todayOrders?.some(
-                (o: any) => o.status === 'SERVED' || o.status === 'COMPLETED'
-              );
-              const isPreparing = child.todayOrders?.some(
-                (o: any) => o.status === 'PREPARING' || o.status === 'CONFIRMED' || o.status === 'PENDING'
-              );
-              const mealLabel = isServed ? 'Đã nhận cơm' : isPreparing ? 'Đang chuẩn bị' : 'Chưa check-in';
-
-              return (
-                <button
-                  key={child.studentId}
-                  onClick={() => setSelectedChild(child)}
-                  className={`flex flex-col gap-2.5 p-3 rounded-2xl border transition-all text-left shrink-0 cursor-pointer min-w-[178px] active:scale-[0.98] ${
-                    isSelected
-                      ? 'bg-[#EFF6FF]/70 text-slate-900 border-[#0057b8] shadow-xs ring-1 ring-[#0057b8]/30'
-                      : 'bg-white text-slate-700 border-slate-200/80 hover:bg-slate-50/70 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="relative shrink-0">
-                      {child.avatar ? (
-                        <img
-                          src={child.avatar}
-                          alt={child.fullName}
-                          className="w-10 h-10 rounded-xl object-cover border border-slate-200 shadow-2xs"
-                        />
-                      ) : (
-                        <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shadow-2xs ${
-                            isSelected ? 'bg-[#0057b8] text-white' : 'bg-slate-100 text-slate-700 border border-slate-200'
-                          }`}
-                        >
-                          {child.fullName.charAt(0)}
-                        </div>
-                      )}
-                      <span
-                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
-                          isServed ? 'bg-emerald-500' : isPreparing ? 'bg-amber-400' : 'bg-slate-300'
-                        }`}
-                      />
-                    </div>
-                    <div className="truncate flex-1 min-w-0">
-                      <p className="text-xs font-bold truncate text-slate-900">{child.fullName}</p>
-                      <p className={`text-[10px] font-mono font-medium ${isSelected ? 'text-[#0057b8]' : 'text-slate-400'}`}>
-                        {child.linkCode || child.studentId}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1.5 border-t border-slate-200/60 text-[11px]">
-                    <span className="font-bold text-slate-900 font-mono">
-                      {Number(child.balance || 0).toLocaleString('vi-VN')} đ
-                    </span>
-                    <span
-                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${
-                        isServed
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : isPreparing
-                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                          : 'bg-slate-100 text-slate-500 border-slate-200'
-                      }`}
-                    >
-                      {mealLabel}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* VIEW 1: CHILDREN DETAILS & MEAL TRACKING */}
-      {currentView === 'children' && !activeChild && (
-        <div className="bg-white rounded-3xl border border-slate-200/80 p-8 text-center space-y-3 shadow-2xs">
-          <div className="w-12 h-12 rounded-2xl bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center mx-auto">
-            <Users className="w-6 h-6" />
-          </div>
-          <h4 className="text-sm font-bold text-slate-800">Chưa liên kết tài khoản con em</h4>
-          <p className="text-xs text-slate-500 max-w-xs mx-auto">
-            Vui lòng liên kết tài khoản học sinh để theo dõi thực đơn, lịch sử nhận cơm và nạp ví ăn bán trú.
-          </p>
-          <button
-            onClick={() => setShowLinkModal(true)}
-            className="py-2.5 px-4 bg-[#0057b8] hover:bg-[#003E82] text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition"
-          >
-            <PlusCircle className="w-4 h-4" />
-            Liên kết con em ngay
-          </button>
-        </div>
-      )}
-
-      {currentView === 'children' && activeChild && (
-        <>
-          {/* Main Child Digital Oversight Card (Refined Gradient) */}
-          <div className="bg-gradient-to-br from-[#003E82] via-[#004e9c] to-[#0057b8] text-white rounded-3xl p-5 shadow-sm space-y-4 relative overflow-hidden">
-            {/* Subtle mesh background accents */}
-            <div className="absolute -top-12 -right-12 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-            <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-sky-400/15 rounded-full blur-xl pointer-events-none" />
-
-            <div className="flex items-start justify-between relative z-10">
-              <div className="flex items-center gap-3.5">
-                <div className="relative">
-                  {activeChild.avatar ? (
-                    <img
-                      src={activeChild.avatar}
-                      alt={activeChild.fullName}
-                      className="w-14 h-14 rounded-2xl object-cover border-2 border-white/30 shadow-xs"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 rounded-2xl bg-white/20 text-white flex items-center justify-center font-black text-xl border border-white/25">
-                      {activeChild.fullName.charAt(0)}
-                    </div>
-                  )}
-                  <span className="absolute -bottom-1 -right-1 bg-emerald-400 w-4 h-4 rounded-full border-2 border-[#003E82]" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <h3 className="font-extrabold text-white text-base tracking-tight">{activeChild.fullName}</h3>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="font-mono text-xs text-white font-bold bg-white/20 px-2 py-0.5 rounded-lg border border-white/25">
-                      {activeChild.linkCode || activeChild.studentId}
-                    </span>
-                    <button
-                      onClick={() => handleCopy(activeChild.linkCode || activeChild.studentId)}
-                      className="text-white/80 hover:text-white p-1 transition cursor-pointer"
-                      title="Sao chép mã học sinh"
-                    >
-                      {copiedText === (activeChild.linkCode || activeChild.studentId) ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-300" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-white/85 flex items-center gap-1 mt-1">
-                    <Building2 className="w-3 h-3 text-white/80" />
-                    <span>{activeChild.canteenName || selectedCanteen?.name || 'THPT FPT Quy Nhơn • Cơ sở 1'}</span>
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Balances & Stats Grid */}
-            <div className="grid grid-cols-2 gap-2.5 relative z-10">
-              <div className="bg-white/10 border border-white/15 p-3 rounded-2xl backdrop-blur-xs">
-                <span className="text-[11px] text-white/80 font-medium block">Số dư ví học sinh</span>
-                <p className="text-xl font-black text-white mt-1 font-mono tracking-tight">
-                  {Number(activeChild.balance || 0).toLocaleString('vi-VN')}{' '}
-                  <span className="text-xs font-normal text-white/70">đ</span>
-                </p>
-              </div>
-              <div className="bg-white/10 border border-white/15 p-3 rounded-2xl backdrop-blur-xs">
-                <span className="text-[11px] text-white/80 font-medium block">Suất ăn tháng</span>
-                <p className="text-xl font-black text-white mt-1 font-mono tracking-tight">
-                  {activeChild.totalRemainingCredits ?? 28}{' '}
-                  <span className="text-xs font-normal text-white/70">suất</span>
-                </p>
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="pt-0.5 relative z-10">
-              <button
-                onClick={openTopupModal}
-                className="w-full py-2.5 bg-white hover:bg-slate-50 text-[#003E82] rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.98]"
-              >
-                <CreditCard className="w-3.5 h-3.5 text-[#0057b8]" />
-                <span>Nạp ví cho con ngay</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Today's Meal Status (FR-PT-02: Trạng thái bữa ăn hôm nay) */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-4 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center">
-                  <Utensils className="w-4 h-4" />
-                </div>
-                <h4 className="text-xs font-bold text-slate-900 tracking-tight">Trạng thái bữa ăn hôm nay</h4>
-              </div>
-              <span className="text-[11px] font-semibold text-slate-400 font-mono">
-                {new Date().toLocaleDateString('vi-VN')}
-              </span>
-            </div>
-
-            {activeChild.todayOrders && activeChild.todayOrders.length > 0 ? (
-              <div className="space-y-2.5">
-                {activeChild.todayOrders.map((order, idx) => {
-                  const isServed = order.status === 'SERVED' || order.status === 'COMPLETED';
-                  const dishCount = order.items?.length || 3;
+          {/* CHILD SWITCHER BAR */}
+          {childrenList.length > 0 && (
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar min-w-0">
+                {childrenList.map((child) => {
+                  const isSelected = activeChild?.studentId === child.studentId;
+                  const isServed = child.todayOrders?.some(
+                    (o: any) => o.status === 'SERVED' || o.status === 'COMPLETED'
+                  );
+                  const isPreparing = child.todayOrders?.some(
+                    (o: any) => o.status === 'PREPARING' || o.status === 'CONFIRMED' || o.status === 'PENDING'
+                  );
 
                   return (
-                    <div
-                      key={order.id || idx}
-                      onClick={() => setSelectedOrderForDetail(order)}
-                      className="p-3.5 rounded-2xl border border-slate-200/80 bg-white hover:border-[#0057b8]/40 hover:bg-slate-50/50 transition-all cursor-pointer shadow-2xs active:scale-[0.99]"
+                    <button
+                      key={child.studentId}
+                      type="button"
+                      onClick={() => setSelectedChild(child)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition shrink-0 cursor-pointer ${
+                        isSelected
+                          ? 'bg-[#0057b8] text-white border-[#0057b8] shadow-2xs'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-[#0057b8]" />
-                          <span className="text-xs font-bold text-slate-900">
-                            {order.mealType === 'BREAKFAST'
-                              ? 'Bữa Sáng'
-                              : order.mealType === 'DINNER'
-                              ? 'Bữa Tối'
-                              : 'Bữa Trưa'}
-                          </span>
-                          <span className="text-[11px] text-slate-400 font-medium">
-                            • {new Date(order.createdAt || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
-                            isServed
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}
-                        >
-                          {isServed ? (
-                            <>
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              <span>
-                                Đã nhận khay
-                                {order.checkins?.[0]?.checkinTime
-                                  ? ` (${new Date(order.checkins[0].checkinTime).toLocaleTimeString('vi-VN', {
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })})`
-                                  : ''}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                              <span>Đang chuẩn bị</span>
-                            </>
-                          )}
-                        </span>
-                      </div>
-
-                      <div className="mt-2.5 flex items-center justify-between text-xs text-slate-600 pt-2 border-t border-slate-100">
-                        <span className="font-medium text-slate-600 text-[11px]">Khay cơm tiêu chuẩn ({dishCount} món dinh dưỡng)</span>
-                        <span className="text-[11px] font-bold text-[#0057b8] hover:text-[#003E82] flex items-center gap-0.5">
-                          Xem món <ChevronRight className="w-3.5 h-3.5" />
-                        </span>
-                      </div>
-                    </div>
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          isServed ? 'bg-emerald-400' : isPreparing ? 'bg-amber-400' : isSelected ? 'bg-white/60' : 'bg-slate-300'
+                        }`}
+                      />
+                      <span className="truncate max-w-[120px]">{child.fullName}</span>
+                    </button>
                   );
                 })}
               </div>
-            ) : (
-              <div className="py-7 text-center space-y-2">
-                <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <p className="text-xs font-bold text-slate-700">
-                  Con chưa điểm danh nhận khay hôm nay
-                </p>
-                <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
-                  Thông báo và chi tiết khay cơm sẽ lập tức hiển thị ngay khi học sinh quét mã QR tại quầy tiếp thực.
-                </p>
-              </div>
-            )}
-          </div>
+              <button
+                type="button"
+                onClick={() => setShowLinkModal(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-semibold text-[#0057b8] bg-white border border-slate-200 hover:bg-[#EFF6FF] transition shrink-0 cursor-pointer"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span>Thêm</span>
+              </button>
+            </div>
+          )}
 
-          {/* CARD GÓP Ý & YÊU CẦU ĐẾN CANTEEN TRƯỜNG */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-4 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center shrink-0">
-                  <MessageSquareHeart className="w-4.5 h-4.5" />
+          {/* EMPTY STATE WHEN NO LINKED CHILD */}
+          {!activeChild ? (
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-6 text-center space-y-2.5 shadow-2xs">
+              <div className="w-10 h-10 rounded-xl bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center mx-auto">
+                <Users className="w-5 h-5" />
+              </div>
+              <h4 className="text-sm font-bold text-slate-800">Chưa liên kết con em</h4>
+              <p className="text-xs text-slate-500">
+                Nhập mã học sinh để theo dõi bữa ăn và nạp ví.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowLinkModal(true)}
+                className="py-2 px-4 bg-[#0057b8] hover:bg-[#003E82] text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                Liên kết ngay
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* ACTIVE CHILD SUMMARY CARD */}
+              <div className="bg-gradient-to-br from-[#003E82] to-[#0057b8] text-white rounded-2xl p-4 shadow-sm space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {activeChild.avatar ? (
+                      <img
+                        src={activeChild.avatar}
+                        alt={activeChild.fullName}
+                        className="w-11 h-11 rounded-xl object-cover border border-white/25 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-11 h-11 rounded-xl bg-white/15 text-white flex items-center justify-center font-bold text-base border border-white/20 shrink-0">
+                        {activeChild.fullName.charAt(0)}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-white text-sm truncate">{activeChild.fullName}</h3>
+                      <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-white/80">
+                        <span className="font-mono font-semibold">{activeChild.linkCode || activeChild.studentId}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(activeChild.linkCode || activeChild.studentId)}
+                          className="text-white/75 hover:text-white cursor-pointer"
+                          title="Sao chép mã học sinh"
+                        >
+                          {copiedText === (activeChild.linkCode || activeChild.studentId) ? (
+                            <Check className="w-3 h-3 text-emerald-300" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                        <span className="text-white/40">•</span>
+                        <span className="truncate">{activeChild.canteenName || selectedCanteen?.name || 'THPT FPT Quy Nhơn'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openTopupModal()}
+                    className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-[#003E82] rounded-xl text-[11px] font-bold transition shrink-0 cursor-pointer"
+                  >
+                    Nạp ví
+                  </button>
                 </div>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900">Góp ý & Yêu cầu Canteen</h4>
-                  <p className="text-[10px] text-slate-400">
-                    Cơ sở: <strong className="text-slate-600">{activeChild.canteenName || selectedCanteen?.name || 'THPT FPT Quy Nhơn'}</strong>
+
+                <div className="grid grid-cols-2 divide-x divide-white/15 bg-white/10 rounded-xl py-2.5">
+                  <div className="px-3">
+                    <span className="text-[11px] text-white/75 block">Số dư ví</span>
+                    <p className="text-base font-bold text-white font-mono mt-0.5">
+                      {Number(activeChild.balance || 0).toLocaleString('vi-VN')} đ
+                    </p>
+                  </div>
+                  <div className="px-3">
+                    <span className="text-[11px] text-white/75 block">Suất ăn tháng</span>
+                    <p className="text-base font-bold text-white font-mono mt-0.5">
+                      {activeChild.totalRemainingCredits ?? 28} suất
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* TODAY'S MEAL STATUS */}
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-2xs space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-900">Bữa ăn hôm nay</h4>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    {todayDisplayStr}
+                  </span>
+                </div>
+
+                {activeChild.todayOrders && activeChild.todayOrders.length > 0 ? (
+                  <div className="divide-y divide-slate-100">
+                    {activeChild.todayOrders.map((order, idx) => {
+                      const isServed = order.status === 'SERVED' || order.status === 'COMPLETED';
+                      const dishCount = order.items?.length || 3;
+
+                      return (
+                        <button
+                          key={order.id || idx}
+                          type="button"
+                          onClick={() => setSelectedOrderForDetail(order)}
+                          className="w-full py-2.5 first:pt-0 last:pb-0 flex items-center justify-between gap-2 text-left hover:bg-slate-50/70 rounded-lg transition cursor-pointer"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-900">
+                              {order.mealType === 'BREAKFAST'
+                                ? 'Bữa Sáng'
+                                : order.mealType === 'DINNER'
+                                ? 'Bữa Tối'
+                                : 'Bữa Trưa'}{' '}
+                              <span className="text-[11px] text-slate-400 font-normal">
+                                • {dishCount} món •{' '}
+                                {new Date(order.createdAt || mountNow).toLocaleTimeString('vi-VN', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                isServed
+                                  ? 'bg-emerald-50 text-emerald-700'
+                                  : 'bg-amber-50 text-amber-700'
+                              }`}
+                            >
+                              {isServed
+                                ? `Đã nhận${
+                                    order.checkins?.[0]?.checkinTime
+                                      ? ` ${new Date(order.checkins[0].checkinTime).toLocaleTimeString('vi-VN', {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                        })}`
+                                      : ''
+                                  }`
+                                : 'Đang chuẩn bị'}
+                            </span>
+                            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="py-4 text-center text-xs text-slate-400">
+                    Con chưa nhận bữa nào hôm nay
                   </p>
-                </div>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => setShowFeedbackModal(true)}
-                className="text-[11px] font-bold text-white bg-[#0057b8] hover:bg-[#003E82] px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Gửi góp ý</span>
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600 bg-slate-50/80 p-3 rounded-2xl border border-slate-100 leading-relaxed">
-              Phụ huynh có thể đóng góp ý kiến về chất lượng khẩu phần ăn, phản ánh phục vụ hoặc gửi yêu cầu chăm sóc dinh dưỡng riêng cho con trực tiếp đến Bếp Canteen trường.
-            </p>
-
-            <div className="flex items-center gap-2 pt-0.5">
-              <button
-                type="button"
-                onClick={() => setShowFeedbackModal(true)}
-                className="flex-1 py-2 px-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-              >
-                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                <span>Gửi đánh giá</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigateTab('feedback')}
-                className="flex-1 py-2 px-3 rounded-xl bg-[#EFF6FF] hover:bg-blue-100/70 text-[#0057b8] text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-              >
-                <MessageSquareHeart className="w-3.5 h-3.5" />
-                <span>Lịch sử phản hồi</span>
-              </button>
-            </div>
-          </div>
+            </>
+          )}
         </>
       )}
 
       {/* VIEW 2: PARENT NUTRITION MENU */}
       {currentView === 'menu' && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-4 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xs font-bold text-slate-900">Thực đơn dinh dưỡng của con</h3>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <p className="text-[11px] text-slate-500 truncate max-w-[200px]">
-                    Trường: <strong className="text-slate-700">{selectedCanteen?.name || activeChild?.canteenName}</strong>
-                  </p>
-                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-[#EFF6FF] text-[#003E82] border border-[#D0E7FF] shrink-0">
-                    <Lock className="w-2.5 h-2.5" />
-                    Cố định
-                  </span>
-                </div>
-              </div>
-            </div>
+        <div className="space-y-3">
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-2xs space-y-2.5">
+            <h3 className="text-sm font-bold text-slate-900">Thực đơn hôm nay</h3>
 
             {/* Meal Shift Filter */}
-            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl">
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-xl">
               {(['BREAKFAST', 'LUNCH', 'DINNER'] as const).map((meal) => (
                 <button
                   key={meal}
                   onClick={() => setSelectedMealType(meal)}
-                  className={`py-1.5 text-xs font-bold rounded-xl transition cursor-pointer ${
+                  className={`py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
                     selectedMealType === meal
                       ? 'bg-white text-slate-900 shadow-2xs'
                       : 'text-slate-500 hover:text-slate-800'
@@ -834,38 +659,25 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
                 return (
                   <div
                     key={dish.id}
-                    onClick={() => setSelectedDishForDetail(dish)}
-                    className="bg-white rounded-2xl border border-slate-200/80 p-3 shadow-2xs hover:border-[#0057b8]/40 transition-all cursor-pointer flex items-center justify-between gap-3 active:scale-[0.99]"
+                    className="bg-white rounded-2xl border border-slate-200/80 p-3 shadow-2xs flex items-center gap-3"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-12 h-12 rounded-xl bg-slate-100 shrink-0 overflow-hidden border border-slate-200/80">
-                        {dish.image ? (
-                          <img
-                            src={dish.image}
-                            alt={dish.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-400">
-                            <Utensils className="w-5 h-5 text-slate-400" />
-                          </div>
-                        )}
+                    <DishImage
+                      src={dish.image}
+                      alt={dish.name}
+                      className="w-12 h-12 rounded-xl bg-slate-100 shrink-0 border border-slate-200/80"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-xs font-bold text-slate-900 truncate">{dish.name}</h4>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
+                          {dish.category === 'MAIN' || dish.category === 'SIDE' ? 'Món mặn' : dish.category === 'SOUP' ? 'Canh' : 'Món ăn'}
+                        </span>
                       </div>
-                      <div className="truncate">
-                        <div className="flex items-center gap-1.5">
-                          <h4 className="text-xs font-bold text-slate-900 truncate">{dish.name}</h4>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
-                            {dish.category === 'MAIN' || dish.category === 'SIDE' ? 'Món mặn' : dish.category === 'SOUP' ? 'Canh' : 'Món ăn'}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
-                          <Sparkles className="w-3 h-3 text-[#0057b8]" />
-                          Chạm để xem chi tiết dinh dưỡng
+                      {dish.description && (
+                        <p className="text-[10.5px] text-slate-500 mt-0.5 truncate">
+                          {dish.description}
                         </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <ChevronRight className="w-4 h-4 text-slate-300" />
+                      )}
                     </div>
                   </div>
                 );
@@ -875,54 +687,53 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
         </div>
       )}
 
-      {/* PAYING REQUEST MODAL (VIETQR) */}
+      {/* PAYING REQUEST MODAL (VIETQR - Centered & Tối giản) */}
       {payingRequest && (
         <div
           onClick={(e) => {
             if (e.target === e.currentTarget && !isProcessingRequest) setPayingRequest(null);
           }}
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[70] flex items-end justify-center"
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[70] flex items-center justify-center p-4 animate-in fade-in duration-150"
         >
-          <div className="w-full max-w-md bg-white rounded-t-3xl p-5 space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain modal-scrollable touch-pan-y animate-in slide-in-from-bottom duration-200">
-            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="text-sm font-black text-[#131B2E]">Thanh Toán Yêu Cầu Cho Con</h4>
-                <p className="text-[11px] text-slate-500">
-                  Duyệt thanh toán cho bé {payingRequest.student?.fullName}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-white rounded-2xl p-4 sm:p-5 space-y-3.5 max-h-[85vh] overflow-y-auto overscroll-contain modal-scrollable touch-pan-y shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-150"
+          >
+            <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+              <div className="min-w-0">
+                <h4 className="text-sm font-bold text-slate-900 truncate">Thanh toán yêu cầu</h4>
+                <p className="text-[11px] text-slate-500 truncate">
+                  {payingRequest.student?.fullName} • {payingRequest.type === 'PACKAGE' ? payingRequest.packageName : 'Nạp ví'}
                 </p>
               </div>
               <button
                 type="button"
                 disabled={isProcessingRequest}
                 onClick={() => setPayingRequest(null)}
-                className="text-slate-400 hover:text-black cursor-pointer"
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer shrink-0"
+                aria-label="Đóng"
               >
-                <X className="w-5 h-5" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* QR Image Box */}
-            <div className="bg-[#F7FAFE] p-4 rounded-2xl border border-[#E2E8F0] flex flex-col items-center">
-              <div className="bg-white p-3 rounded-xl shadow-xs border border-slate-200">
+            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 flex flex-col items-center">
+              <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
                 <img
                   src={`https://img.vietqr.io/image/${bankBin}-${bankAccount}-compact.png?amount=${payingRequest.amount}&addInfo=${encodeURIComponent(
                     `DUYET ${payingRequest.student?.fullName || 'CON'}`
                   )}&accountName=${encodeURIComponent(selectedCanteen?.bankAccountName || selectedCanteen?.name || 'CANTEEN FPT')}`}
                   alt="VietQR"
-                  className="w-48 h-48 object-contain"
+                  className="w-44 h-44 object-contain"
                 />
               </div>
-              <p className="text-sm font-black text-[#0057b8] mt-3">
-                Số tiền cần trả: {Number(payingRequest.amount).toLocaleString('vi-VN')} đ
-              </p>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                {payingRequest.type === 'PACKAGE' ? `Gói: ${payingRequest.packageName}` : 'Nạp trực tiếp vào ví học sinh'}
+              <p className="text-base font-black text-[#0057b8] font-mono tabular-nums mt-2.5">
+                {Number(payingRequest.amount).toLocaleString('vi-VN')} đ
               </p>
             </div>
 
             {requestPaySuccessMsg && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-xs font-bold text-center">
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-xs font-semibold text-center">
                 {requestPaySuccessMsg}
               </div>
             )}
@@ -931,89 +742,127 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
               type="button"
               disabled={isProcessingRequest}
               onClick={() => handleConfirmPayRequest(payingRequest)}
-              className="w-full py-3 rounded-xl bg-[#0057b8] text-white font-bold text-xs cursor-pointer hover:bg-[#004593] disabled:opacity-50 transition shadow-md flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded-xl bg-[#0057b8] text-white font-bold text-xs cursor-pointer hover:bg-[#004593] disabled:opacity-50 transition flex items-center justify-center gap-1.5"
             >
-              {isProcessingRequest ? (
-                <span>Đang xác nhận giao dịch...</span>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Tôi Đã Chuyển Khoản • Duyệt Cho Con</span>
-                </>
-              )}
+              <span>{isProcessingRequest ? 'Đang xác nhận...' : 'Tôi đã chuyển khoản'}</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* VIEW 3: PARENT WALLET & VIETQR TOPUP */}
+      {/* VIEW 3: PARENT WALLET & VIETQR TOPUP (Tối giản) */}
       {currentView === 'wallet' && !activeChild && (
-        <div className="bg-white rounded-3xl border border-slate-200/80 p-8 text-center space-y-3 shadow-2xs">
-          <div className="w-12 h-12 rounded-2xl bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center mx-auto">
-            <CreditCard className="w-6 h-6" />
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 text-center space-y-3 shadow-2xs">
+          <div className="w-10 h-10 rounded-xl bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center mx-auto">
+            <CreditCard className="w-5 h-5" />
           </div>
-          <h4 className="text-sm font-bold text-slate-800">Chưa chọn con em để nạp ví</h4>
-          <p className="text-xs text-slate-500 max-w-xs mx-auto">
-            Vui lòng liên kết tài khoản con em để sử dụng tính năng nạp ví VietQR chuẩn xác cho học sinh.
-          </p>
+          <div className="space-y-1">
+            <h4 className="text-sm font-bold text-slate-900">Chưa có học sinh liên kết</h4>
+            <p className="text-xs text-slate-500">Liên kết tài khoản con em để nạp tiền vào ví.</p>
+          </div>
           <button
+            type="button"
             onClick={() => setShowLinkModal(true)}
-            className="py-2.5 px-4 bg-[#0057b8] hover:bg-[#003E82] text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition"
+            className="py-2.5 px-4 bg-[#0057b8] hover:bg-[#003E82] text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition"
           >
             <PlusCircle className="w-4 h-4" />
-            Liên kết con em ngay
+            <span>Liên kết học sinh</span>
           </button>
         </div>
       )}
 
       {currentView === 'wallet' && activeChild && (
-        <div className="space-y-4">
-          <div className="bg-gradient-to-br from-[#003E82] via-[#004e9c] to-[#0057b8] text-white rounded-3xl p-5 shadow-sm space-y-4 relative overflow-hidden">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-xs text-white/80 font-medium">Ví Canteen học sinh</span>
-                <h3 className="text-xl font-black text-white mt-0.5">{activeChild.fullName}</h3>
+        <div className="space-y-3">
+          {childrenList.length > 1 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              {childrenList.map((child) => {
+                const isSelected = child.studentId === activeChild.studentId;
+                return (
+                  <button
+                    key={child.studentId}
+                    type="button"
+                    onClick={() => setSelectedChild(child)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer whitespace-nowrap shrink-0 ${
+                      isSelected
+                        ? 'bg-[#0057b8] text-white border-[#0057b8] shadow-2xs'
+                        : 'bg-white text-slate-600 border-slate-200/80 hover:bg-slate-50'
+                    }`}
+                  >
+                    {child.fullName}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="bg-gradient-to-br from-[#003E82] via-[#004e9c] to-[#0057b8] text-white rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <span className="text-[11px] text-white/75 font-medium block">Ví Canteen</span>
+                <h3 className="text-base font-bold text-white truncate">{activeChild.fullName}</h3>
               </div>
-              <span className="text-xs font-bold text-white bg-white/20 border border-white/20 px-2.5 py-1 rounded-full font-mono">
+              <span className="text-[11px] font-bold text-white bg-white/15 px-2.5 py-0.5 rounded-full font-mono shrink-0">
                 {activeChild.linkCode || activeChild.studentId}
               </span>
             </div>
 
-            <div className="p-3.5 bg-white/10 border border-white/15 rounded-2xl backdrop-blur-xs">
-              <span className="text-[11px] text-white/80">Số dư hiện khả dụng</span>
-              <p className="text-2xl font-black text-white mt-1 font-mono tracking-tight">
-                {Number(activeChild.balance || 0).toLocaleString('vi-VN')}{' '}
-                <span className="text-xs font-normal text-white/70">đ</span>
+            <div>
+              <span className="text-[11px] text-white/75 block">Số dư hiện tại</span>
+              <p className="text-2xl font-black text-white font-mono tabular-nums tracking-tight mt-0.5">
+                {Number(activeChild.balance || 0).toLocaleString('vi-VN')} đ
               </p>
             </div>
 
             <button
-              onClick={openTopupModal}
+              type="button"
+              onClick={() => openTopupModal()}
               className="w-full py-2.5 bg-white hover:bg-slate-50 text-[#003E82] rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.98]"
             >
-              <CreditCard className="w-3.5 h-3.5 text-[#0057b8]" />
-              <span>Nạp tiền nhanh qua VietQR chuẩn</span>
+              <QrCode className="w-4 h-4 text-[#0057b8]" />
+              <span>Nạp tiền qua VietQR</span>
             </button>
           </div>
 
-          {/* Quick VietQR Topup CTA Card */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-5 shadow-2xs text-center space-y-3">
-            <div className="w-12 h-12 bg-blue-50 text-[#0057b8] rounded-2xl flex items-center justify-center mx-auto border border-blue-100">
-              <QrCode className="w-6 h-6" />
+          {/* CANTEEN MEAL PACKAGES REFERENCE */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-2xs space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-xs font-bold text-slate-900">Gói ăn Canteen</h4>
+              <span className="text-[11px] text-slate-400">Tham khảo mức nạp</span>
             </div>
-            <div>
-              <h4 className="text-xs font-bold text-slate-800">Nạp tiền vào ví bằng mã VietQR</h4>
-              <p className="text-[11px] text-slate-500 mt-1 max-w-xs mx-auto">
-                Chọn số tiền và hệ thống sẽ tự động sinh mã VietQR chuyển khoản chính xác với cú pháp định danh của con.
-              </p>
-            </div>
-            <button
-              onClick={openTopupModal}
-              className="w-full py-2.5 bg-[#0057b8] hover:bg-[#003E82] text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-[0.98]"
-            >
-              <CreditCard className="w-3.5 h-3.5" />
-              <span>Chọn số tiền & Sinh mã VietQR</span>
-            </button>
+
+            {loadingPackages ? (
+              <div className="space-y-2 py-1">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-11 bg-slate-100 rounded-xl animate-pulse" />
+                ))}
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {canteenPackages.map((pkg) => (
+                  <div key={pkg.id} className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900 truncate">{pkg.name}</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                        {pkg.totalCredits || 0} suất • {pkg.durationDays || 30} ngày
+                        {pkg.includesBreakfast ? ' • Sáng, Trưa, Tối' : ' • Trưa & Tối'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-[#0057b8] font-mono tabular-nums">
+                        {Number(pkg.price || 0).toLocaleString('vi-VN')} đ
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => openTopupModal(Number(pkg.price))}
+                        className="px-2.5 py-1 rounded-lg bg-[#EFF6FF] hover:bg-blue-100 text-[#0057b8] text-[11px] font-bold transition cursor-pointer active:scale-95"
+                      >
+                        Nạp
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1052,29 +901,6 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
                 />
               </div>
 
-              {/* Sample Chips for 1-Touch Demo */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] text-slate-400 font-semibold block">Mã mẫu thử nghiệm nhanh:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { code: 'HS-2026-0098', name: 'Nguyễn Văn An' },
-                    { code: 'HS-2026-0102', name: 'Trần Thị Bích' },
-                    { code: 'HS-2026-0115', name: 'Lê Hoàng Long' },
-                    { code: 'HS-2026-0120', name: 'Phạm Minh Đức' },
-                  ].map((item) => (
-                    <button
-                      key={item.code}
-                      type="button"
-                      onClick={() => setInputStudentCode(item.code)}
-                      className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-[#EFF6FF] text-[#0057b8] hover:bg-blue-100/70 border border-[#0057b8]/20 cursor-pointer flex items-center gap-1 transition active:scale-95"
-                    >
-                      <span className="font-mono">{item.code}</span>
-                      <span className="text-slate-500 font-normal">({item.name})</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {linkMsg && (
                 <div
                   className={`p-2.5 rounded-xl text-xs font-medium flex items-center gap-1.5 ${
@@ -1098,150 +924,124 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
         </div>
       )}
 
-      {/* MODAL 2: 2-STEP VIETQR TOPUP */}
+      {/* MODAL 2: 2-STEP VIETQR TOPUP (Tối giản) */}
       {showTopupModal && activeChild && (
         <div
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowTopupModal(false);
           }}
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150"
         >
-          <div className="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4 relative shadow-2xl overscroll-contain modal-scrollable touch-pan-y max-h-[90vh] overflow-y-auto border border-slate-100">
-            <button
-              onClick={() => setShowTopupModal(false)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full max-w-sm rounded-2xl p-4 sm:p-5 space-y-3.5 relative shadow-2xl overscroll-contain modal-scrollable touch-pan-y max-h-[85vh] overflow-y-auto border border-slate-100 animate-in zoom-in-95 duration-150"
+          >
+            <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-slate-900 truncate">
+                  {topupStep === 'SELECT_AMOUNT' ? 'Nạp tiền vào ví' : 'Quét mã VietQR'}
+                </h3>
+                <p className="text-[11px] text-slate-500 truncate">
+                  {activeChild.fullName} ({activeChild.linkCode || activeChild.studentId})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTopupModal(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer shrink-0"
+                aria-label="Đóng"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-            {/* STEP 1: CHỌN SỐ TIỀN */}
             {topupStep === 'SELECT_AMOUNT' ? (
-              <div className="space-y-4">
-                <div className="text-center space-y-1">
-                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-blue-50 text-[#0057b8] text-[10px] font-bold">
-                    Bước 1 / 2 • Chọn số tiền
-                  </span>
-                  <h3 className="text-sm font-bold text-slate-900">Nạp Tiền Vào Ví Của Con</h3>
-                  <p className="text-[11px] text-slate-500">
-                    Cho học sinh: <span className="font-bold text-slate-800">{activeChild.fullName}</span> ({activeChild.linkCode || activeChild.studentId})
-                  </p>
-                </div>
-
-                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between text-xs">
-                  <span className="text-slate-500">Số dư hiện tại:</span>
-                  <span className="font-bold font-mono text-slate-900">
+              <div className="space-y-3.5">
+                <div className="px-3 py-2.5 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between text-xs">
+                  <span className="text-slate-500">Số dư hiện tại</span>
+                  <span className="font-bold font-mono text-slate-900 tabular-nums">
                     {Number(activeChild.balance || 0).toLocaleString('vi-VN')} đ
                   </span>
                 </div>
 
-                {/* Preset Buttons */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-slate-600">Chọn nhanh mức tiền nạp:</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[50000, 100000, 200000, 500000].map((amt) => {
-                      const isSelected = !customTopupAmount && topupAmount === amt;
-                      return (
-                        <button
-                          key={amt}
-                          type="button"
-                          onClick={() => {
-                            setTopupAmount(amt);
-                            setCustomTopupAmount('');
-                          }}
-                          className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition text-left cursor-pointer flex items-center justify-between active:scale-95 ${
-                            isSelected
-                              ? 'border-[#0057b8] bg-[#EFF6FF] text-[#0057b8] shadow-2xs ring-1 ring-[#0057b8]/30'
-                              : 'border-slate-200 text-slate-700 bg-white hover:bg-slate-50'
-                          }`}
-                        >
-                          <span>{(amt / 1000).toLocaleString('vi-VN')}k</span>
-                          <span className="text-[11px] font-normal text-slate-500 font-mono">{amt.toLocaleString('vi-VN')} đ</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[50000, 100000, 200000, 500000].map((amt) => {
+                    const isSelected = !customTopupAmount && topupAmount === amt;
+                    return (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => {
+                          setTopupAmount(amt);
+                          setCustomTopupAmount('');
+                        }}
+                        className={`py-2 px-1 rounded-xl text-xs font-bold font-mono border transition cursor-pointer active:scale-95 ${
+                          isSelected
+                            ? 'border-[#0057b8] bg-[#0057b8] text-white shadow-2xs'
+                            : 'border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100'
+                        }`}
+                      >
+                        {(amt / 1000).toLocaleString('vi-VN')}k
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* Custom Amount Input */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-slate-600">Hoặc nhập số tiền khác:</label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      step="10000"
-                      min="10000"
-                      value={customTopupAmount}
-                      onChange={(e) => setCustomTopupAmount(e.target.value)}
-                      placeholder="VD: 150000"
-                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 placeholder:text-slate-400 placeholder:font-normal focus:border-[#0057b8] focus:ring-1 focus:ring-[#0057b8] outline-hidden pr-8 transition"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">đ</span>
-                  </div>
-                </div>
-
-                {/* Amount preview */}
-                <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-2xl flex items-center justify-between">
-                  <span className="text-xs font-medium text-slate-600">Số tiền sẽ nạp:</span>
-                  <span className="text-sm font-black text-[#0057b8] font-mono">
-                    {effectiveTopupAmount.toLocaleString('vi-VN')} đ
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="10000"
+                    min="10000"
+                    value={customTopupAmount}
+                    onChange={(e) => setCustomTopupAmount(e.target.value)}
+                    placeholder="Hoặc nhập số tiền khác..."
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 placeholder:text-slate-400 placeholder:font-sans placeholder:font-normal focus:border-[#0057b8] focus:bg-white outline-hidden pr-8 transition"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
+                    đ
                   </span>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => setTopupStep('SHOW_QR')}
-                  className="w-full py-2.5 bg-[#0057b8] hover:bg-[#003E82] text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.98]"
+                  className="w-full py-2.5 bg-[#0057b8] hover:bg-[#003E82] text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs active:scale-[0.98]"
                 >
-                  <span>Tiếp tục tạo mã VietQR</span>
-                  <ChevronRight className="w-4 h-4" />
+                  Tạo mã VietQR ({effectiveTopupAmount.toLocaleString('vi-VN')} đ)
                 </button>
               </div>
             ) : (
-              /* STEP 2: SINH MÃ & QUÉT VIETQR */
-              <div className="space-y-4">
-                <div className="text-center space-y-1">
-                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold">
-                    Bước 2 / 2 • Quét mã chuyển khoản
-                  </span>
-                  <h3 className="text-sm font-bold text-slate-900">Mã VietQR Nạp Ví</h3>
-                  <p className="text-[11px] text-slate-500">
-                    Mở app ngân hàng quét mã bên dưới để nạp chính xác
-                  </p>
-                </div>
-
-                {/* VietQR Image Card */}
-                <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl text-center space-y-2.5">
+              <div className="space-y-3.5">
+                <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl text-center space-y-2.5">
                   <img
                     src={vietQrUrl}
                     alt="VietQR"
-                    className="w-44 h-44 mx-auto object-contain rounded-xl shadow-xs bg-white p-2 border border-slate-100"
+                    className="w-44 h-44 mx-auto object-contain rounded-xl bg-white p-2 border border-slate-200/80"
                   />
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200/80">
-                      <span className="text-slate-500 text-[11px]">Số tiền nạp:</span>
-                      <span className="font-bold text-slate-900 font-mono text-sm text-[#0057b8]">
+                  <div className="bg-white rounded-xl border border-slate-200/80 divide-y divide-slate-100 text-xs text-left">
+                    <div className="px-3 py-2 flex items-center justify-between">
+                      <span className="text-slate-500 text-[11px]">Số tiền</span>
+                      <span className="font-bold font-mono text-[#0057b8] tabular-nums">
                         {effectiveTopupAmount.toLocaleString('vi-VN')} đ
                       </span>
                     </div>
-                    <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200/80">
-                      <span className="text-slate-500 text-[11px]">Nội dung CK:</span>
-                      <div className="flex items-center gap-1">
-                        <span className="font-mono font-bold text-slate-900">{transferContent}</span>
+                    <div className="px-3 py-2 flex items-center justify-between gap-2">
+                      <span className="text-slate-500 text-[11px] shrink-0">Nội dung CK</span>
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="font-mono font-bold text-slate-900 truncate">{transferContent}</span>
                         <button
                           type="button"
                           onClick={() => handleCopy(transferContent)}
-                          className="text-slate-400 hover:text-slate-700 p-0.5 transition cursor-pointer"
-                          title="Sao chép nội dung CK"
+                          className="text-slate-400 hover:text-slate-700 p-0.5 transition cursor-pointer shrink-0"
+                          title="Sao chép"
                         >
-                          {copiedText === transferContent ? <Check className="w-3.5 h-3.5 text-[#0057b8]" /> : <Copy className="w-3.5 h-3.5" />}
+                          {copiedText === transferContent ? (
+                            <Check className="w-3.5 h-3.5 text-[#0057b8]" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
                         </button>
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200/80 text-[11px]">
-                      <span className="text-slate-500">Người thụ hưởng:</span>
-                      <span className="font-semibold text-slate-800">
-                        {selectedCanteen?.name || 'CANTEEN FPT'}
-                      </span>
                     </div>
                   </div>
                 </div>
@@ -1257,18 +1057,17 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
                   <button
                     type="button"
                     onClick={() => setTopupStep('SELECT_AMOUNT')}
-                    className="flex-1 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
                   >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    <span>Đổi mức</span>
+                    Đổi mức
                   </button>
                   <button
                     type="button"
                     onClick={handleQuickTopupConfirm}
                     disabled={topupLoading}
-                    className="flex-2 py-2.5 bg-[#0057b8] hover:bg-[#003E82] text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs disabled:opacity-50 active:scale-[0.98]"
+                    className="flex-2 py-2.5 bg-[#0057b8] hover:bg-[#003E82] text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs disabled:opacity-50"
                   >
-                    {topupLoading ? 'Đang xử lý...' : 'Xác nhận đã chuyển tiền'}
+                    {topupLoading ? 'Đang xử lý...' : 'Đã chuyển khoản'}
                   </button>
                 </div>
               </div>
@@ -1277,27 +1076,15 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
         </div>
       )}
 
-      {/* DISH DETAIL MODAL (Progressive disclosure for nutrition) */}
-      <DishDetailModal
-        dish={selectedDishForDetail}
-        isOpen={Boolean(selectedDishForDetail)}
-        readOnly={true}
-        onClose={() => setSelectedDishForDetail(null)}
-      />
-
-      {/* ORDER DETAIL BOTTOMSHEET MODAL (Progressive disclosure for today's meal) */}
+      {/* ORDER DETAIL MODAL (Centered) */}
       {selectedOrderForDetail && (
         <div
           onClick={(e) => {
             if (e.target === e.currentTarget) setSelectedOrderForDetail(null);
           }}
-          className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200"
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150"
         >
-          <div className="w-full max-w-md bg-white rounded-t-3xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-250 max-h-[85vh] flex flex-col overscroll-contain modal-scrollable touch-pan-y border-t border-slate-100">
-            <div className="pt-3 pb-1 flex justify-center shrink-0">
-              <div className="w-10 h-1 bg-slate-300 rounded-full" />
-            </div>
-
+          <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col overscroll-contain modal-scrollable touch-pan-y border border-slate-100">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Chi Tiết Bữa Ăn Của Con</h3>
@@ -1307,7 +1094,7 @@ export const ParentPage: React.FC<ParentPageProps> = ({ activeSubTab = 'children
                     : selectedOrderForDetail.mealType === 'DINNER'
                     ? 'Bữa Tối'
                     : 'Bữa Trưa'}{' '}
-                  • {new Date(selectedOrderForDetail.createdAt || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - {new Date().toLocaleDateString('vi-VN')}
+                  • {new Date(selectedOrderForDetail.createdAt || mountNow).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - {todayDisplayStr}
                 </p>
               </div>
               <button

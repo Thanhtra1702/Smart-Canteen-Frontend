@@ -12,6 +12,9 @@ export default defineConfig({
     host: true,
     allowedHosts: true,
     port: 5174,
+    fs: {
+      allow: ['..']
+    },
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:3000',

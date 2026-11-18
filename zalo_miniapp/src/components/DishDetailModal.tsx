@@ -1,6 +1,13 @@
 import React from 'react';
-import { X, Check, Sparkles, Utensils, Info, AlertCircle } from 'lucide-react';
+import {
+  XIcon as X,
+  CheckIcon as Check,
+  SparkleIcon as Sparkles,
+  ForkKnifeIcon as Utensils,
+  InfoIcon as Info,
+} from '@phosphor-icons/react';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
+import { DishImage } from './DishImage';
 
 interface DishDetailModalProps {
   dish: any | null;
@@ -36,38 +43,21 @@ export const DishDetailModal: React.FC<DishDetailModalProps> = ({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-white rounded-t-3xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-250 max-h-[85vh] flex flex-col overscroll-contain modal-scrollable touch-pan-y"
+        className="w-full max-w-sm bg-white rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col overscroll-contain modal-scrollable touch-pan-y"
       >
-        {/* Top Handle */}
-        <div className="pt-3 pb-1 flex justify-center shrink-0">
-          <div className="w-10 h-1 bg-slate-300 rounded-full" />
-        </div>
 
         {/* Hero Image */}
         <div className="relative h-56 w-full bg-slate-100 shrink-0 overflow-hidden">
-          {dish.image ? (
-            <img
-              src={dish.image}
-              alt={dish.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 text-slate-400 p-4">
-              <div className="w-14 h-14 rounded-2xl bg-white shadow-2xs border border-slate-200 flex items-center justify-center mb-2 text-slate-400">
-                <Utensils className="w-7 h-7" />
-              </div>
-              <span className="text-xs font-semibold text-slate-600">
-                Canteen đang cập nhật ảnh thực tế
-              </span>
-              <span className="text-[10px] text-slate-400 mt-0.5">
-                (Hình ảnh sẽ hiển thị ngay khi quản lý cơ sở cập nhật)
-              </span>
-            </div>
-          )}
+          <DishImage
+            src={dish.image}
+            alt={dish.name}
+            className="w-full h-full"
+            imgClassName="w-full h-full object-cover"
+          />
           <button
             type="button"
             onClick={onClose}
@@ -96,7 +86,7 @@ export const DishDetailModal: React.FC<DishDetailModalProps> = ({
                 {dish.name}
               </h3>
               {dish.extraPrice > 0 && (
-                <span className="bg-[#EFF6FF] text-[#0057b8] font-black text-xs px-2 py-0.5 rounded-lg shrink-0">
+                <span className="bg-slate-100 text-slate-800 font-bold text-xs px-2 py-0.5 rounded-lg shrink-0">
                   +{formatVND(dish.extraPrice)}
                 </span>
               )}
@@ -105,7 +95,7 @@ export const DishDetailModal: React.FC<DishDetailModalProps> = ({
             {/* Category Badges */}
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               {dish.tag && (
-                <span className="inline-flex items-center gap-1 bg-[#EFF6FF] text-[#0057b8] border border-[#D0E7FF] text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
                   <Utensils className="w-3 h-3" />
                   {dish.tag}
                 </span>
@@ -128,10 +118,10 @@ export const DishDetailModal: React.FC<DishDetailModalProps> = ({
           </div>
 
           {/* Complimentary Free Refill Note */}
-          <div className="bg-[#EFF6FF] border border-[#BFDBFE] p-3 rounded-2xl flex items-start gap-2.5 text-xs text-[#1E40AF]">
-            <Info className="w-4 h-4 text-[#0057b8] shrink-0 mt-0.5" />
+          <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl flex items-start gap-2.5 text-xs text-slate-600">
+            <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
             <p className="leading-relaxed">
-              Suất ăn đã bao gồm <strong>Cơm trắng / Cơm lứt</strong> và <strong>Canh nóng súp tự chọn 0đ</strong> không giới hạn tại quầy tiếp thực.
+              Suất ăn đã bao gồm <strong className="text-slate-800">Cơm trắng / Cơm lứt</strong> và <strong className="text-slate-800">Canh nóng súp tự chọn 0đ</strong> không giới hạn tại quầy tiếp thực.
             </p>
           </div>
         </div>

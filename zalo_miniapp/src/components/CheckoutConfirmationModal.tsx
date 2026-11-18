@@ -1,21 +1,20 @@
 import React, { useState } from 'react';
 import {
-  X,
-  MapPin,
-  Calendar,
-  Clock,
-  User,
-  Utensils,
-  Sparkles,
-  CreditCard,
-  QrCode,
-  ShieldCheck,
-  AlertCircle,
-  ArrowRight,
-  Check,
-  ChevronRight,
-  Info,
-} from 'lucide-react';
+  XIcon as X,
+  MapPinIcon as MapPin,
+  CalendarBlankIcon as Calendar,
+  ClockIcon as Clock,
+  UserIcon as User,
+  ForkKnifeIcon as Utensils,
+  SparkleIcon as Sparkles,
+  CreditCardIcon as CreditCard,
+  QrCodeIcon as QrCode,
+  ShieldCheckIcon as ShieldCheck,
+  WarningCircleIcon as AlertCircle,
+  ArrowRightIcon as ArrowRight,
+  CheckIcon as Check,
+} from '@phosphor-icons/react';
+import { DishImage } from './DishImage';
 
 const formatVND = (num: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
@@ -87,18 +86,12 @@ export const CheckoutConfirmationModal: React.FC<CheckoutConfirmationModalProps>
       : mealSlot === 'LUNCH'
       ? '11:00 - 13:00'
       : '17:00 - 19:00';
-  const cutoffTime =
-    mealSlot === 'BREAKFAST'
-      ? canteen?.cutoffBreakfast || '07:00'
-      : mealSlot === 'LUNCH'
-      ? canteen?.cutoffLunch || '10:30'
-      : canteen?.cutoffDinner || '16:00';
 
   const dateLabel =
     orderDate === todayStr
-      ? `Hôm nay (${new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })})`
+      ? `Hôm nay (${new Date(`${todayStr}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })})`
       : orderDate === tomorrowStr
-      ? `Ngày mai (${new Date(Date.now() + 86400000).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })})`
+      ? `Ngày mai (${new Date(`${tomorrowStr}T00:00:00+07:00`).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })})`
       : orderDate;
 
   const handleConfirm = async () => {
@@ -183,20 +176,12 @@ export const CheckoutConfirmationModal: React.FC<CheckoutConfirmationModalProps>
       onClick={(e) => {
         if (e.target === e.currentTarget && !isSubmitting) onClose();
       }}
-      className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[65] flex items-end justify-center"
+      className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[65] flex items-center justify-center p-4 animate-in fade-in duration-150"
     >
-      <div className="w-full max-w-md bg-white rounded-t-3xl max-h-[90vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-200">
-        {/* Top Drag Indicator */}
-        <div className="pt-3 pb-1 flex justify-center shrink-0">
-          <div className="w-10 h-1.5 bg-slate-300 rounded-full" />
-        </div>
-
+      <div className="w-full max-w-sm bg-white rounded-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
         {/* Modal Header */}
-        <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <div>
-            <h3 className="text-base font-black text-[#131B2E]">Xác Nhận Đơn Hàng</h3>
-            <p className="text-[11px] text-slate-500">Kiểm tra thông tin suất ăn & chọn cách thanh toán</p>
-          </div>
+        <div className="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <h3 className="text-base font-black text-[#131B2E]">Xác Nhận Đơn Hàng</h3>
           <button
             type="button"
             onClick={onClose}
@@ -216,217 +201,172 @@ export const CheckoutConfirmationModal: React.FC<CheckoutConfirmationModalProps>
             </div>
           )}
 
-          {/* Section 1: Canteen & Thời Gian Nhận */}
-          <div className="bg-[#F8FAFC] rounded-2xl p-3.5 border border-slate-200 space-y-2.5">
-            <div className="flex items-start gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#0057b8]/10 text-[#0057b8] flex items-center justify-center shrink-0 mt-0.5">
-                <MapPin className="w-4 h-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Cơ sở phục vụ
-                </span>
-                <p className="text-xs font-bold text-slate-800 leading-snug">
-                  {canteen?.name || 'Canteen Cơ Sở'}
-                </p>
-              </div>
+          {/* Section 1: Canteen & Thời Gian Nhận (Minimalist) */}
+          <div className="bg-slate-50/90 rounded-2xl px-3.5 py-3 border border-slate-200/80 space-y-2 text-xs">
+            <div className="flex items-center gap-2 font-bold text-slate-900">
+              <MapPin className="w-4 h-4 text-[#0057b8] shrink-0" />
+              <span className="truncate">{canteen?.name || 'Canteen Cơ Sở'}</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/60 text-xs">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600">
+              <span className="inline-flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <div className="min-w-0">
-                  <span className="text-[10px] text-slate-400 block leading-tight">Ngày nhận:</span>
-                  <span className="font-bold text-slate-700 text-[11px] truncate block">{dateLabel}</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
+                <strong className="text-slate-800">{dateLabel}</strong>
+              </span>
+              <span className="inline-flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <div className="min-w-0">
-                  <span className="text-[10px] text-slate-400 block leading-tight">Ca ăn:</span>
-                  <span className="font-bold text-slate-700 text-[11px] truncate block">
-                    {mealSlotName} ({mealSlotTime} • Chốt: {cutoffTime})
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60 text-xs">
-              <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <div className="min-w-0 flex-1">
-                <span className="text-[10px] text-slate-400 block leading-tight">Học sinh nhận suất:</span>
-                <span className="font-bold text-slate-800 text-[11px] truncate block">
-                  {user?.fullName || 'Nguyễn Văn An'} • MSSV: {user?.studentCode || 'HS-2026-0098'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Thông Tin Món Ăn Đã Chọn (Khay cơm) */}
-          <div className="bg-white rounded-2xl p-4 border border-slate-200 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Utensils className="w-4 h-4 text-[#0057b8]" />
-                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
-                  Chi tiết suất ăn ({orderQuantity} suất)
-                </h4>
-              </div>
-              <span className="text-xs font-bold text-[#0057b8] bg-[#EFF6FF] px-2 py-0.5 rounded-lg">
-                {isBreakfast ? 'Combo Điểm Tâm' : 'Combo Tiêu Chuẩn'}
+                <strong className="text-slate-800">{mealSlotName}</strong>
+                <span className="text-slate-500">({mealSlotTime})</span>
               </span>
             </div>
 
-            {/* List of chosen dishes */}
-            <div className="space-y-1.5 pl-1">
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-600 pt-1.5 border-t border-slate-200/70">
+              <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span className="truncate">
+                <strong className="text-slate-800">{user?.fullName || 'Nguyễn Văn An'}</strong>
+                {user?.studentCode ? ` • ${user.studentCode}` : ''}
+              </span>
+            </div>
+          </div>
+
+          {/* Section 2: Thông Tin Món Ăn Đã Chọn (Minimalist + Thumbnails) */}
+          <div className="bg-white rounded-2xl p-3.5 border border-slate-200/90 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Utensils className="w-4 h-4 text-[#0057b8] shrink-0" />
+                <h4 className="text-xs font-bold text-slate-900 whitespace-nowrap">
+                  Món đã chọn ({orderQuantity} suất)
+                </h4>
+              </div>
+              <span className="text-[10.5px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg whitespace-nowrap shrink-0">
+                {isBreakfast ? 'Điểm tâm' : 'Combo chuẩn'}
+              </span>
+            </div>
+
+            {/* List of chosen dishes with thumbnails */}
+            <div className="divide-y divide-slate-100">
               {selectedDishes.map((dish, idx) => (
-                <div key={dish.id || idx} className="flex items-center justify-between text-xs py-1 border-b border-slate-100 last:border-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-4 h-4 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold flex items-center justify-center shrink-0">
-                      {idx + 1}
-                    </span>
-                    <span className="font-medium text-slate-800 truncate">{dish.name}</span>
+                <div key={dish.id || idx} className="flex items-center justify-between gap-2.5 py-2 first:pt-1 last:pb-1">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <DishImage
+                      src={dish.image}
+                      alt={dish.name}
+                      className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200/70 shrink-0"
+                    />
+                    <span className="text-xs font-semibold text-slate-800 truncate">{dish.name}</span>
                   </div>
-                  <span className="text-[11px] font-semibold text-slate-500 shrink-0">x1</span>
+                  <span className="text-[11px] font-bold text-slate-400 shrink-0">x{orderQuantity}</span>
                 </div>
               ))}
             </div>
 
-            {/* Free Refill Inclusions */}
-            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 text-[11px] text-slate-600 space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-slate-700">
-                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Đã bao gồm tự chọn tại quầy (0đ):</span>
-              </div>
-              <p className="text-slate-500 pl-5">
-                • Cơm trắng dẻo / Cơm gạo lứt (Tự múc theo sức)
-                <br />• Canh súp rau củ theo mùa (Nóng hổi mỗi ngày)
-              </p>
+            {/* Compact Free Refill Strip */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50/70 border border-emerald-100 text-[11px] font-medium text-emerald-700">
+              <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" weight="bold" />
+              <span className="truncate">Kèm cơm &amp; canh nóng miễn phí tại quầy</span>
             </div>
           </div>
 
-          {/* Section 3: Phương Thức Thanh Toán (Radio Group) */}
-          <div className="space-y-2.5">
+          {/* Section 3: Phương Thức Thanh Toán (Minimalist) */}
+          <div className="space-y-2">
             <label className="text-xs font-bold text-slate-900 uppercase tracking-wide block">
               Phương Thức Thanh Toán
             </label>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {/* Option 1: Vé tháng bán trú */}
               {hasActivePass && (
-                <div
+                <button
+                  type="button"
                   onClick={() => setSelectedMethod('PASS')}
-                  className={`p-3.5 rounded-2xl border-2 transition cursor-pointer flex items-center gap-3 ${
+                  className={`w-full px-3 py-2.5 rounded-xl border transition cursor-pointer flex items-center gap-2.5 text-left ${
                     selectedMethod === 'PASS'
-                      ? 'border-[#0057b8] bg-[#EFF6FF]'
+                      ? 'border-[#0057b8] bg-[#EFF6FF] ring-1 ring-[#0057b8]/30'
                       : 'border-slate-200 bg-white hover:bg-slate-50'
                   }`}
                 >
-                  <div className="w-9 h-9 rounded-xl bg-[#0057b8] text-white flex items-center justify-center shrink-0">
-                    <Sparkles className="w-4.5 h-4.5" />
+                  <div className="w-6 h-6 rounded-lg bg-[#0057b8] text-white flex items-center justify-center shrink-0">
+                    <Sparkles className="w-3.5 h-3.5" weight="fill" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900 truncate">
-                        Vé Tháng Bán Trú
-                      </span>
-                      <span className="text-xs font-black text-[#0057b8] bg-white px-2 py-0.5 rounded-md border border-[#0057b8]/20">
-                        0đ
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-600 mt-0.5">
-                      Khấu trừ 1 suất trong tổng số <strong>{remainingMeals} suất</strong> còn lại
-                    </p>
+                  <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-slate-900 truncate">
+                      Vé Tháng <span className="font-medium text-slate-500">({remainingMeals} suất)</span>
+                    </span>
+                    <span className="text-xs font-bold text-slate-900 shrink-0">0đ</span>
                   </div>
                   <div
-                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                    className={`w-4 h-4 rounded-full border-[1.5px] flex items-center justify-center shrink-0 ${
                       selectedMethod === 'PASS'
                         ? 'border-[#0057b8] bg-[#0057b8]'
                         : 'border-slate-300'
                     }`}
                   >
-                    {selectedMethod === 'PASS' && <Check className="w-2.5 h-2.5 text-white stroke-[3px]" />}
+                    {selectedMethod === 'PASS' && <Check className="w-2.5 h-2.5 text-white" weight="bold" />}
                   </div>
-                </div>
+                </button>
               )}
 
               {/* Option 2: Số dư Ví Canteen */}
-              <div
+              <button
+                type="button"
                 onClick={() => setSelectedMethod('WALLET')}
-                className={`p-3.5 rounded-2xl border-2 transition cursor-pointer flex items-center gap-3 ${
+                className={`w-full px-3 py-2.5 rounded-xl border transition cursor-pointer flex items-center gap-2.5 text-left ${
                   selectedMethod === 'WALLET'
-                    ? 'border-[#0057b8] bg-[#EFF6FF]'
+                    ? 'border-[#0057b8] bg-[#EFF6FF] ring-1 ring-[#0057b8]/30'
                     : 'border-slate-200 bg-white hover:bg-slate-50'
                 }`}
               >
-                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                  <CreditCard className="w-4.5 h-4.5" />
+                <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                  <CreditCard className="w-3.5 h-3.5" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900 truncate">
-                      Số Dư Ví Canteen
-                    </span>
-                    <span className="text-xs font-bold text-emerald-700">
-                      {formatVND(walletBalance)}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    {isWalletInsufficient ? (
-                      <span className="text-rose-600 font-medium">
-                        Số dư không đủ để thanh toán {formatVND(totalOriginalAmount)}
-                      </span>
-                    ) : (
-                      'Tự động trừ trực tiếp vào số dư ví'
-                    )}
-                  </p>
+                <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-900 truncate">Ví Canteen</span>
+                  <span
+                    className={`text-xs font-bold shrink-0 tabular-nums ${
+                      isWalletInsufficient ? 'text-rose-600' : 'text-emerald-700'
+                    }`}
+                  >
+                    {formatVND(walletBalance)}
+                  </span>
                 </div>
                 <div
-                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                  className={`w-4 h-4 rounded-full border-[1.5px] flex items-center justify-center shrink-0 ${
                     selectedMethod === 'WALLET'
                       ? 'border-[#0057b8] bg-[#0057b8]'
                       : 'border-slate-300'
                   }`}
                 >
-                  {selectedMethod === 'WALLET' && <Check className="w-2.5 h-2.5 text-white stroke-[3px]" />}
+                  {selectedMethod === 'WALLET' && <Check className="w-2.5 h-2.5 text-white" weight="bold" />}
                 </div>
-              </div>
+              </button>
 
               {/* Option 3: Chuyển khoản VietQR */}
-              <div
+              <button
+                type="button"
                 onClick={() => setSelectedMethod('VIETQR')}
-                className={`p-3.5 rounded-2xl border-2 transition cursor-pointer flex items-center gap-3 ${
+                className={`w-full px-3 py-2.5 rounded-xl border transition cursor-pointer flex items-center gap-2.5 text-left ${
                   selectedMethod === 'VIETQR'
-                    ? 'border-[#0057b8] bg-[#EFF6FF]'
+                    ? 'border-[#0057b8] bg-[#EFF6FF] ring-1 ring-[#0057b8]/30'
                     : 'border-slate-200 bg-white hover:bg-slate-50'
                 }`}
               >
-                <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0">
-                  <QrCode className="w-4.5 h-4.5" />
+                <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0">
+                  <QrCode className="w-3.5 h-3.5" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900 truncate">
-                      Quét Mã VietQR Ngân Hàng
-                    </span>
-                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-                      Mọi App Ngân Hàng
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Tạo mã QR thanh toán nhanh 24/7 từ Mobile Banking
-                  </p>
+                <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-900 truncate">VietQR Ngân Hàng</span>
+                  <span className="text-[11px] font-semibold text-amber-700 shrink-0">Quét QR</span>
                 </div>
                 <div
-                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                  className={`w-4 h-4 rounded-full border-[1.5px] flex items-center justify-center shrink-0 ${
                     selectedMethod === 'VIETQR'
                       ? 'border-[#0057b8] bg-[#0057b8]'
                       : 'border-slate-300'
                   }`}
                 >
-                  {selectedMethod === 'VIETQR' && <Check className="w-2.5 h-2.5 text-white stroke-[3px]" />}
+                  {selectedMethod === 'VIETQR' && <Check className="w-2.5 h-2.5 text-white" weight="bold" />}
                 </div>
-              </div>
+              </button>
             </div>
           </div>
 
@@ -473,7 +413,7 @@ export const CheckoutConfirmationModal: React.FC<CheckoutConfirmationModalProps>
             <div className="pt-2 border-t border-slate-200 flex justify-between items-baseline">
               <span className="font-bold text-slate-900 text-xs">Tổng thanh toán:</span>
               <div className="text-right">
-                <span className="font-black text-sm text-[#0057b8]">
+                <span className="font-black text-sm text-slate-900">
                   {formatVND(finalPayAmount)}
                 </span>
                 {isPassSelected && (
@@ -490,7 +430,7 @@ export const CheckoutConfirmationModal: React.FC<CheckoutConfirmationModalProps>
         <div className="p-4 bg-white border-t border-slate-100 flex items-center justify-between gap-3 shrink-0">
           <div>
             <span className="text-[10px] text-slate-500 block leading-tight">Cần thanh toán:</span>
-            <span className="text-base font-black text-[#0057b8]">
+            <span className="text-base font-black text-slate-900">
               {formatVND(finalPayAmount)}
             </span>
           </div>

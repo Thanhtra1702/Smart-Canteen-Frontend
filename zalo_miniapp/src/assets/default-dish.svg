@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="240" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F8FAFC" />
+      <stop offset="100%" stop-color="#EFF6FF" />
+    </linearGradient>
+    <linearGradient id="plateRim" x1="48" y1="48" x2="192" y2="192" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#E2E8F0" />
+    </linearGradient>
+  </defs>
+  <rect width="240" height="240" fill="url(#bgGrad)" />
+  <circle cx="120" cy="120" r="74" fill="url(#plateRim)" stroke="#DCE6F2" stroke-width="2" />
+  <circle cx="120" cy="120" r="54" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
+  <circle cx="120" cy="120" r="44" fill="#F8FAFC" />
+  <!-- Minimal Fork (Left) -->
+  <path
+    d="M104 94V112C104 115.5 106.5 118 109.5 118.5V145C109.5 146.9 111.1 148.5 113 148.5C114.9 148.5 116.5 146.9 116.5 145V118.5C119.5 118 122 115.5 122 112V94"
+    stroke="#94A3B8"
+    stroke-width="3.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path d="M113 94V111" stroke="#94A3B8" stroke-width="3" stroke-linecap="round" />
+  <!-- Minimal Knife / Spoon (Right) -->
+  <path
+    d="M135 94C139.5 94 142 100 142 109C142 115.5 139.5 119 136.5 119.5V145C136.5 146.9 135 148.5 133 148.5C131.1 148.5 129.5 146.9 129.5 145V98C129.5 95.8 132 94 135 94Z"
+    fill="#94A3B8"
+    opacity="0.85"
+  />
+</svg>

@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  X,
-  Bell,
-  Clock,
-  Info,
-  Megaphone,
-  CheckCircle2,
-  Calendar,
-  Sparkles,
-} from 'lucide-react';
+  XIcon as X,
+  BellIcon as Bell,
+  ClockIcon as Clock,
+  InfoIcon as Info,
+  MegaphoneIcon as Megaphone,
+  CalendarBlankIcon as Calendar,
+} from '@phosphor-icons/react';
 import { api } from '../services/api';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
@@ -142,11 +140,11 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({ isOpen, on
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in"
+      className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl border border-slate-200 p-5 shadow-2xl space-y-4 max-h-[85vh] flex flex-col overscroll-contain modal-scrollable touch-pan-y"
+        className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xl space-y-3.5 max-h-[85vh] flex flex-col overscroll-contain modal-scrollable touch-pan-y animate-in zoom-in-95 duration-150"
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">

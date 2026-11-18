@@ -1,8 +1,33 @@
 import React, { useState } from 'react';
-import { Star, X, CheckCircle2, AlertCircle, Send, MessageSquareHeart } from 'lucide-react';
+import {
+  StarIcon as Star,
+  XIcon as X,
+  CheckCircleIcon as CheckCircle2,
+  WarningCircleIcon as AlertCircle,
+  PaperPlaneTiltIcon as Send,
+  ChatCircleDotsIcon as MessageSquareHeart,
+} from '@phosphor-icons/react';
 import { api } from '../services/api';
 import { useApp } from '../context/AppContext';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
+
+interface FeedbackSuccessNoticeProps {
+  action?: React.ReactNode;
+  className?: string;
+}
+
+/** Shared feedback submission confirmation state across parent and student views. */
+export const FeedbackSuccessNotice: React.FC<FeedbackSuccessNoticeProps> = ({
+  action,
+  className = 'py-8',
+}) => (
+  <div className={`text-center space-y-2 animate-in fade-in duration-150 ${className}`}>
+    <CheckCircle2 className="w-12 h-12 text-[#0057b8] mx-auto" />
+    <h4 className="text-sm font-bold text-slate-900">Cảm ơn bạn đã đóng góp ý kiến!</h4>
+    <p className="text-xs text-slate-500">Phản hồi của bạn đã được ghi nhận vào hệ thống.</p>
+    {action && <div className="pt-2">{action}</div>}
+  </div>
+);
 
 interface FeedbackModalProps {
   isOpen: boolean;
@@ -37,18 +62,6 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
     3: 'Tạm ổn / Bình thường',
     4: 'Hài lòng, đồ ăn ngon',
     5: 'Rất ngon & phục vụ chu đáo',
-  };
-
-  const quickTags = [
-    'Món ăn nóng sốt',
-    'Hương vị vừa miệng',
-    'Khay cơm sạch sẽ',
-    'Cần thêm rau xanh',
-    'Phục vụ nhanh nhẹn',
-  ];
-
-  const handleAddTag = (tag: string) => {
-    setComment((prev) => (prev ? `${prev}, ${tag.toLowerCase()}` : tag));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -92,11 +105,11 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in"
+      className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl border border-slate-200 p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain modal-scrollable touch-pan-y"
+        className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xl space-y-3.5 max-h-[85vh] overflow-y-auto overscroll-contain modal-scrollable touch-pan-y animate-in zoom-in-95 duration-150"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
         {/* Header */}
@@ -119,11 +132,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
         </div>
 
         {success ? (
-          <div className="py-8 text-center space-y-2">
-            <CheckCircle2 className="w-12 h-12 text-[#0057b8] mx-auto animate-bounce" />
-            <h4 className="text-sm font-bold text-slate-900">Cảm ơn bạn đã đóng góp ý kiến!</h4>
-            <p className="text-xs text-slate-500">Phản hồi của bạn đã được ghi nhận vào hệ thống.</p>
-          </div>
+          <FeedbackSuccessNotice />
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {errorMsg && (
@@ -173,7 +182,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                 <select
                   value={selectedDishId}
                   onChange={(e) => setSelectedDishId(e.target.value)}
-                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 font-medium focus:outline-none focus:border-slate-800"
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 font-medium focus:outline-none focus:border-[#0057b8]"
                 >
                   <option value="">-- Đánh giá chung cho cả suất ăn --</option>
                   {dishes.map((d: any) => (
@@ -185,23 +194,6 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
               </div>
             )}
 
-            {/* Quick Tag Chips */}
-            <div className="space-y-1.5">
-              <span className="text-xs font-semibold text-slate-700 block">Gợi ý nhanh</span>
-              <div className="flex flex-wrap gap-1.5">
-                {quickTags.map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => handleAddTag(tag)}
-                    className="text-[11px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1 rounded-lg transition cursor-pointer"
-                  >
-                    + {tag}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Comment Area */}
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-700">Ý kiến đóng góp chi tiết</label>
@@ -210,7 +202,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
                 onChange={(e) => setComment(e.target.value)}
                 rows={3}
                 placeholder="Chia sẻ thêm cảm nhận của bạn về khẩu phần, độ nóng, gia vị..."
-                className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-slate-800 resize-none"
+                className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-[#0057b8] resize-none"
               />
             </div>
 
@@ -218,7 +210,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-60"
+              className="w-full py-3 bg-[#0057b8] hover:bg-[#003E82] text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-60"
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

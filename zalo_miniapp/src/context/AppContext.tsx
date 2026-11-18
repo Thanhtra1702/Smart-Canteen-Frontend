@@ -1,6 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { XIcon as X } from '@phosphor-icons/react';
 import { api } from '../services/api';
 import { getZaloUserInfo, type ZaloUser } from '../services/zalo';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
+
+export interface AppConfirmOptions {
+  title?: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  danger?: boolean;
+}
 
 export type AppRole = 'STUDENT' | 'PARENT' | 'STAFF';
 
@@ -86,7 +96,7 @@ export const playSuccessBeep = () => {
     gain2.connect(ctx.destination);
     osc2.start(now + 0.12);
     osc2.stop(now + 0.45);
-  } catch (e) {
+  } catch {
     // AudioContext blocked or not supported
   }
 };
@@ -123,7 +133,7 @@ export const playFailureBeep = () => {
     gain2.connect(ctx.destination);
     osc2.start(now + 0.15);
     osc2.stop(now + 0.4);
-  } catch (e) {
+  } catch {
     // AudioContext blocked or not supported
   }
 };
@@ -160,59 +170,6 @@ export const checkIsCutoffPassed = (
     cutoffTimeStr: cutoffTime,
   };
 };
-
-const DEMO_FALLBACK_CHILDREN: ChildItem[] = [
-  {
-    linkId: 'link-01',
-    studentId: 'HS-2026-0098',
-    fullName: 'Nguyễn Văn An',
-    email: 'student@smartcanteen.vn',
-    phone: '0903000001',
-    avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=120&auto=format&fit=crop&q=80',
-    balance: 250000,
-    linkCode: 'HS-2026-0098',
-    canteenName: 'THPT FPT Quy Nhơn • Cơ sở 1',
-    todayOrders: [
-      {
-        id: 'ORD-2026-01',
-        mealType: 'LUNCH',
-        status: 'SERVED',
-        totalAmount: 35000,
-        createdAt: new Date().toISOString(),
-        items: [
-          { dish: { name: 'Cơm tấm sườn bì chả', category: 'MAIN' } },
-          { dish: { name: 'Canh cải thìa thịt băm', category: 'SOUP' } },
-        ],
-      },
-    ],
-    totalRemainingCredits: 28,
-  },
-  {
-    linkId: 'link-02',
-    studentId: 'HS-2026-0102',
-    fullName: 'Trần Thị Bích',
-    email: 'student2@smartcanteen.vn',
-    phone: '0903000002',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=120&auto=format&fit=crop&q=80',
-    balance: 180000,
-    linkCode: 'HS-2026-0102',
-    canteenName: 'THPT FPT Quy Nhơn • Cơ sở 1',
-    todayOrders: [
-      {
-        id: 'ORD-2026-02',
-        mealType: 'LUNCH',
-        status: 'PREPARING',
-        totalAmount: 30000,
-        createdAt: new Date().toISOString(),
-        items: [
-          { dish: { name: 'Cơm gạo lứt nấm kho tiêu', category: 'MAIN' } },
-          { dish: { name: 'Canh rong biển đậu non', category: 'SOUP' } },
-        ],
-      },
-    ],
-    totalRemainingCredits: 15,
-  },
-];
 
 const DEMO_FALLBACK_SERVING_QUEUE: ServingQueueData = {
   stats: {
@@ -413,6 +370,10 @@ interface AppContextType {
     logoUrl: string;
   };
   refreshBrand: () => Promise<void>;
+
+  // Centered Dialog Helpers (replacing native alert/confirm)
+  showAlert: (message: string, title?: string) => Promise<void>;
+  showConfirm: (options: AppConfirmOptions) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -422,7 +383,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const saved = localStorage.getItem('canteen_active_role');
       if (saved === 'PARENT' || saved === 'STAFF' || saved === 'STUDENT') return saved;
-    } catch (_) {}
+    } catch {}
     return 'STUDENT';
   });
   const [user, setUser] = useState<any | null>(null);
@@ -434,17 +395,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [wallet, setWallet] = useState<any | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedMealType, setSelectedMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER'>('LUNCH');
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [myFeedbacks, setMyFeedbacks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dialogState, setDialogState] = useState<{
+    mode: 'alert' | 'confirm';
+    title: string;
+    message: string;
+    confirmText: string;
+    cancelText: string;
+    danger?: boolean;
+    resolve: (result: boolean) => void;
+  } | null>(null);
+
+  useModalScrollLock(Boolean(dialogState));
+
+  const showAlert = useCallback((message: string, title = 'Thông báo') => {
+    return new Promise<void>((resolve) => {
+      setDialogState({
+        mode: 'alert',
+        title,
+        message,
+        confirmText: 'Đóng',
+        cancelText: '',
+        resolve: () => resolve(),
+      });
+    });
+  }, []);
+
+  const showConfirm = useCallback((options: AppConfirmOptions) => {
+    return new Promise<boolean>((resolve) => {
+      setDialogState({
+        mode: 'confirm',
+        title: options.title || 'Xác nhận',
+        message: options.message,
+        confirmText: options.confirmText || 'Xác nhận',
+        cancelText: options.cancelText || 'Hủy',
+        danger: options.danger,
+        resolve,
+      });
+    });
+  }, []);
 
   // Global Brand State
   const [brand, setBrand] = useState<{ brandName: string; brandSubtitle: string; logoUrl: string }>(() => {
     try {
       const saved = localStorage.getItem('canteen_brand_settings');
       if (saved) return JSON.parse(saved);
-    } catch (_) {}
+    } catch {}
     return {
       brandName: 'Smart Canteen',
       brandSubtitle: 'Hệ thống F&B Chuỗi',
@@ -587,7 +586,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const role = loginRes.data?.user?.role;
         const appRole = role === 'PARENT' ? 'PARENT' : (role === 'ADMIN' || role === 'STAFF' || role === 'CANTEEN_STAFF' || role === 'SUPER_ADMIN') ? 'STAFF' : 'STUDENT';
         setCurrentRole(appRole);
-        try { localStorage.setItem('canteen_active_role', appRole); } catch (_) {}
+        try { localStorage.setItem('canteen_active_role', appRole); } catch {}
         if (role === 'PARENT') {
           await refreshChildren();
         } else if (role === 'ADMIN' || role === 'STAFF' || role === 'CANTEEN_STAFF' || role === 'SUPER_ADMIN') {
@@ -599,7 +598,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return false;
     } catch (err: any) {
-      if (err.response) {
+      if (err.response && err.response.status < 500) {
         console.warn(`Đăng nhập ${email} bị từ chối (${err.response.status}):`, err.response.data?.message);
         return false;
       }
@@ -646,7 +645,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const switchRole = async (role: AppRole) => {
     setCurrentRole(role);
-    try { localStorage.setItem('canteen_active_role', role); } catch (_) {}
+    try { localStorage.setItem('canteen_active_role', role); } catch {}
     setLoading(true);
     localStorage.removeItem('canteen_logged_out');
     try {
@@ -808,14 +807,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const refreshFeedbacks = async () => {
+  const refreshFeedbacks = useCallback(async () => {
     try {
       const res = await api.get('/feedbacks/me');
       setMyFeedbacks(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.warn('Chưa thể tải phản hồi của tôi:', err);
     }
-  };
+  }, []);
 
   // Parent Functions
   const refreshChildren = async () => {
@@ -893,7 +892,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         success: true,
         message: `Đã nạp thành công ${amount.toLocaleString('vi-VN')} đ vào ví của con!`,
       };
-    } catch (err: any) {
+    } catch {
       // Local state fallback
       setChildrenList((prev) =>
         prev.map((c) => (c.studentId === studentId ? { ...c, balance: c.balance + amount } : c))
@@ -1182,9 +1181,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const initAuthRef = useRef(initAuth);
+  useEffect(() => {
+    initAuthRef.current = initAuth;
+  });
+
   useEffect(() => {
     refreshBrand();
-    initAuth();
+    initAuthRef.current();
   }, [refreshBrand]);
 
   // ----------------------------------------------------
@@ -1446,9 +1450,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateCanteenConfig,
         brand,
         refreshBrand,
+        showAlert,
+        showConfirm,
       }}
     >
       {children}
+
+      {dialogState && (
+        <div
+          onClick={() => {
+            const resolve = dialogState.resolve;
+            setDialogState(null);
+            resolve(false);
+          }}
+          className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 space-y-3.5 shadow-2xl animate-in zoom-in-95 duration-150"
+          >
+            <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-900">{dialogState.title}</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  const resolve = dialogState.resolve;
+                  setDialogState(null);
+                  resolve(false);
+                }}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer"
+                aria-label="Đóng"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">{dialogState.message}</p>
+
+            <div className="flex items-center gap-2 pt-1">
+              {dialogState.mode === 'confirm' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const resolve = dialogState.resolve;
+                    setDialogState(null);
+                    resolve(false);
+                  }}
+                  className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer"
+                >
+                  {dialogState.cancelText}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  const resolve = dialogState.resolve;
+                  setDialogState(null);
+                  resolve(true);
+                }}
+                className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition cursor-pointer text-white active:scale-98 ${
+                  dialogState.danger
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : 'bg-[#0057b8] hover:bg-[#004593]'
+                }`}
+              >
+                {dialogState.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppContext.Provider>
   );
 };

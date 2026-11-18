@@ -2,7 +2,16 @@ import React, { useState } from 'react';
 import { useApp, checkIsCutoffPassed } from '../context/AppContext';
 import { api } from '../services/api';
 import type { TabKey } from '../components/BottomNavigation';
-import { ShoppingBag, Trash2, ArrowLeft, CheckCircle2, AlertCircle, Calendar, MapPin, Sparkles } from 'lucide-react';
+import {
+  ShoppingBagIcon as ShoppingBag,
+  TrashIcon as Trash2,
+  ArrowLeftIcon as ArrowLeft,
+  CheckCircleIcon as CheckCircle2,
+  WarningCircleIcon as AlertCircle,
+  CalendarBlankIcon as Calendar,
+  MapPinIcon as MapPin,
+  SparkleIcon as Sparkles,
+} from '@phosphor-icons/react';
 
 interface CartPageProps {
   onNavigateTab: (tab: TabKey) => void;
@@ -13,7 +22,6 @@ export const CartPage: React.FC<CartPageProps> = ({ onNavigateTab }) => {
     cart,
     removeFromCart,
     clearCart,
-    cartTotal,
     surchargeTotal,
     standardPrice,
     selectedCanteen,
@@ -88,7 +96,7 @@ export const CartPage: React.FC<CartPageProps> = ({ onNavigateTab }) => {
       if (createdOrderId) {
         try {
           localStorage.setItem('canteen_last_created_order_id', createdOrderId);
-        } catch (_) {}
+        } catch {}
       }
       await refreshUserData();
       await refreshOrders();

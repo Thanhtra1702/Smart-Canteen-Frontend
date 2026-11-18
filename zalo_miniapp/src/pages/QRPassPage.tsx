@@ -4,31 +4,23 @@ import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 import type { TabKey } from '../components/BottomNavigation';
 import {
-  QrCode,
-  Plus,
-  RefreshCw,
-  Clock,
-  Utensils,
-  CheckCircle,
-  AlertCircle,
-  Calendar,
-  Sparkles,
-  MapPin,
-  MessageSquareHeart,
-  ChevronRight,
-  ShieldCheck,
-  Copy,
-  Check,
-  Download,
-  Info,
-  X,
-  Edit3,
-  Trash2,
-  CheckCircle2,
-  AlertTriangle,
-  ChefHat,
-} from 'lucide-react';
-import { FeedbackModal } from '../components/FeedbackModal';
+  QrCodeIcon as QrCode,
+  PlusIcon as Plus,
+  ArrowsClockwiseIcon as RefreshCw,
+  ClockIcon as Clock,
+  ForkKnifeIcon as Utensils,
+  CheckCircleIcon as CheckCircle,
+  WarningCircleIcon as AlertCircle,
+  CopyIcon as Copy,
+  CheckIcon as Check,
+  DownloadSimpleIcon as Download,
+  InfoIcon as Info,
+  XIcon as X,
+  PencilSimpleIcon as Edit3,
+  TrashIcon as Trash2,
+  ChefHatIcon as ChefHat,
+} from '@phosphor-icons/react';
+import { DishImage } from '../components/DishImage';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface QRPassPageProps {
@@ -44,8 +36,10 @@ export const QRPassPage: React.FC<QRPassPageProps> = ({ onNavigateTab }) => {
     refreshOrders,
     wallet,
     selectedMealType,
-    setSelectedMealType,
     refreshUserData,
+    loading,
+    showAlert,
+    showConfirm,
   } = useApp();
 
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
@@ -54,7 +48,6 @@ export const QRPassPage: React.FC<QRPassPageProps> = ({ onNavigateTab }) => {
   const [countdown, setCountdown] = useState<number>(300);
   const [generatingToken, setGeneratingToken] = useState<boolean>(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
-  const [showFeedbackModal, setShowFeedbackModal] = useState<boolean>(false);
   const [copiedOtp, setCopiedOtp] = useState<boolean>(false);
   const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
   const [showGuideModal, setShowGuideModal] = useState<boolean>(false);
@@ -67,7 +60,7 @@ export const QRPassPage: React.FC<QRPassPageProps> = ({ onNavigateTab }) => {
   const [editErrorMsg, setEditErrorMsg] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
 
-  useModalScrollLock(showGuideModal || showFeedbackModal);
+  useModalScrollLock(showGuideModal);
 
   // Screen WakeLock API to keep display awake during meal pickup
   useEffect(() => {
@@ -99,7 +92,7 @@ export const QRPassPage: React.FC<QRPassPageProps> = ({ onNavigateTab }) => {
   }, []);
 
   // Filter pending/confirmed orders awaiting pickup for TODAY only
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const [todayStr] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }));
   const pendingOrders = activeOrders.filter((o) => {
     if (o.status !== 'PENDING' && o.status !== 'CONFIRMED') return false;
     const ordDate = o.orderDate
@@ -107,17 +100,6 @@ export const QRPassPage: React.FC<QRPassPageProps> = ({ onNavigateTab }) => {
       : (o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }) : todayStr);
     return ordDate === todayStr;
   });
-
-  const servedOrdersToday = activeOrders.filter((o) => {
-    if (o.status !== 'SERVED' && o.status !== 'COMPLETED') return false;
-    const ordDate = o.orderDate
-      ? new Date(o.orderDate).toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })
-      : (o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }) : todayStr);
-    return ordDate === todayStr;
-  });
-
-  const remainingMeals = Number(wallet?.remainingMeals ?? wallet?.totalRemainingMeals ?? 0);
-  const hasPackage = remainingMeals > 0;
 
   // Sort pending orders: unscanned orders FIRST (so QR code displays immediately!), then scanned waiting orders, then newest createdAt
   const sortedPendingOrders = [...pendingOrders].sort((a, b) => {
@@ -143,7 +125,7 @@ export const QRPassPage: React.FC<QRPassPageProps> = ({ onNavigateTab }) => {
         if (matchingOrder) {
           try {
             localStorage.removeItem('canteen_last_created_order_id');
-          } catch (_) {}
+          } catch {}
           setSelectedOrder(matchingOrder);
           return;
         }
@@ -162,11 +144,14 @@ export const QRPassPage: React.FC<QRPassPageProps> = ({ onNavigateTab }) => {
     }
   }, [activeOrders, sortedPendingOrders, selectedOrder]);
 
+  const selectedOrderId = selectedOrder?.id;
+  const selectedOrderStatus = selectedOrder?.status;
+
   // Polling hook: Poll orders every 3s when waiting for food
   useEffect(() => {
-    if (!selectedOrder) return;
+    if (!selectedOrderId) return;
     const isWaiting =
-      selectedOrder.status === 'PENDING' || selectedOrder.status === 'CONFIRMED';
+      selectedOrderStatus === 'PENDING' || selectedOrderStatus === 'CONFIRMED';
     if (!isWaiting) return;
 
     const interval = setInterval(async () => {
@@ -178,7 +163,7 @@ export const QRPassPage: React.FC<QRPassPageProps> = ({ onNavigateTab }) => {
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [selectedOrder?.id, selectedOrder?.status, refreshOrders]);
+  }, [selectedOrderId, selectedOrderStatus, refreshOrders]);
 
   const generatePickupToken = useCallback(
     async (order: any) => {
@@ -252,12 +237,14 @@ export const QRPassPage: React.FC<QRPassPageProps> = ({ onNavigateTab }) => {
     }
   };
 
+  const cleanOrderId = selectedOrder?.id ? selectedOrder.id.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() : '';
+
   const orderCode = selectedOrder?.id
     ? `#${selectedOrder.id.substring(0, 8).toUpperCase()}`
     : '';
 
-  const otpCode = selectedOrder?.id
-    ? `${selectedOrder.id.substring(0, 3).toUpperCase()} ${selectedOrder.id.substring(3, 6).toUpperCase()}`
+  const otpCode = cleanOrderId
+    ? `${cleanOrderId.substring(0, 3)} ${cleanOrderId.substring(3, 6)}`.trim()
     : '';
 
   const qrValue = selectedOrder?.id ? `ORDER:${selectedOrder.id}` : (qrToken || (wallet?.studentCode ? `STUDENT:${wallet.studentCode}` : (user?.id ? `STUDENT:${user.id}` : '')));
@@ -371,17 +358,31 @@ export const QRPassPage: React.FC<QRPassPageProps> = ({ onNavigateTab }) => {
 
   const handleCancelOrder = async () => {
     if (!selectedOrder) return;
-    if (!window.confirm('Bạn có chắc chắn muốn hủy đơn hàng này không? Tiền/lượt ăn đã thanh toán sẽ được hoàn trả 100% vào tài khoản của bạn ngay lập tức.')) {
-      return;
-    }
+    const confirmed = await showConfirm({
+      title: 'Hủy đơn hàng',
+      message: 'Bạn có chắc chắn muốn hủy đơn hàng này không? Tiền/lượt ăn đã thanh toán sẽ được hoàn trả 100% vào tài khoản của bạn.',
+      confirmText: 'Hủy đơn',
+      cancelText: 'Giữ lại',
+      danger: true,
+    });
+    if (!confirmed) return;
+
     try {
       setIsCancelling(true);
       const res = await api.put(`/orders/${selectedOrder.id}/cancel`);
-      alert(res.data?.message || 'Hủy đơn hàng thành công! Số tiền/lượt ăn đã được hoàn trả lại ví.');
+      setQrToken('');
+      setSelectedOrder(null);
       await refreshOrders();
       await refreshUserData();
+      await showAlert(
+        res.data?.message || 'Hủy đơn hàng thành công! Số tiền/lượt ăn đã được hoàn trả lại ví.',
+        'Đã hủy đơn'
+      );
     } catch (err: any) {
-      alert(err?.response?.data?.message || err?.message || 'Không thể hủy đơn hàng');
+      await showAlert(
+        err?.response?.data?.message || err?.message || 'Không thể hủy đơn hàng',
+        'Lỗi'
+      );
     } finally {
       setIsCancelling(false);
     }
@@ -412,126 +413,109 @@ export const QRPassPage: React.FC<QRPassPageProps> = ({ onNavigateTab }) => {
     }
   };
 
+  const activeShiftTime =
+    selectedOrder?.mealType === 'BREAKFAST'
+      ? 'Sáng • 06:30 - 08:30'
+      : selectedOrder?.mealType === 'DINNER'
+      ? 'Chiều • 17:00 - 19:00'
+      : 'Trưa • 11:00 - 13:00';
+
   return (
-    <div className="p-4 space-y-3.5 pb-28 bg-[#F7FAFE] min-h-screen">
-      {/* 1. Header (Clean & Minimalist Shift & Title) */}
-      <div className="text-center space-y-1">
-        <div className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-100 px-3 py-1 rounded-full text-xs font-semibold text-[#0057b8]">
-          <Clock className="w-3.5 h-3.5" />
-          <span>CA ĂN TRƯA • 11:00 - 13:30</span>
-        </div>
-        <h2 className="text-base font-bold text-slate-900">
-          Phiếu Ăn Điện Tử (Dining Pass)
+    <div className="px-3.5 pt-3 sm:px-5 sm:pt-4 pb-28 space-y-3 bg-[#F7FAFE] min-h-screen">
+      {/* 1. Header (Minimal & Responsive) */}
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm sm:text-base font-bold text-slate-900 truncate">
+          Phiếu Ăn Điện Tử
         </h2>
-        <p className="text-xs text-slate-500">
-          {pendingOrders.length > 0
-            ? 'Xuất trình mã QR tại quầy để nhân viên quét nhận suất cơm'
-            : 'Mã QR sẽ hiển thị sau khi bạn hoàn tất đặt món'}
-        </p>
+        {selectedOrder && (
+          <div className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200/80 px-2.5 py-1 rounded-full text-[11px] font-semibold text-slate-700 shrink-0">
+            <Clock className="w-3 h-3 shrink-0" />
+            <span>{activeShiftTime}</span>
+          </div>
+        )}
       </div>
 
-      {/* 2. Order Switcher: Chỉ hiển thị khi có từ 2 suất ăn đã đặt hôm nay */}
-{sortedPendingOrders.length > 1 && (
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-            {sortedPendingOrders.map((ord, idx) => {
-              const isCurrent = selectedOrder?.id === ord.id;
-              const mealLabel = ord.mealType === 'BREAKFAST' ? 'Bữa Sáng' : ord.mealType === 'DINNER' ? 'Bữa Chiều' : 'Bữa Trưa';
-              const isWaiting = ord.isWaitingServing;
-              return (
-                <button
-                  key={ord.id}
-                  onClick={() => setSelectedOrder(ord)}
-className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-1.5 active:scale-95 ${
-                    isCurrent
-                      ? isWaiting
-                        ? 'bg-amber-500 text-white border-amber-600 shadow-2xs font-bold'
-                        : 'bg-[#0057b8] text-white border-[#0057b8] shadow-2xs font-bold'
-                      : isWaiting
-                      ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <span>{isWaiting ? '⏳' : '🎟️'}</span>
-                  <span>Suất {idx + 1}: {mealLabel}</span>
-                  <span className={`text-[10px] ml-0.5 px-1 py-0.2 rounded font-mono ${isCurrent ? 'bg-black/15' : 'bg-slate-100'}`}>
-                    {isWaiting ? 'Chờ gắp' : 'Mã QR'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-<p className="text-[10.5px] text-slate-400 text-left px-1">
-            Chạm vào từng suất để chuyển mã QR nhận phần cơm tương ứng
-          </p>
+      {/* 2. Order Switcher: Responsive grid when 2+ orders today */}
+      {sortedPendingOrders.length > 1 && (
+        <div
+          className={`bg-slate-100 p-1 rounded-xl gap-1 grid ${
+            sortedPendingOrders.length === 2
+              ? 'grid-cols-2'
+              : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'
+          }`}
+        >
+          {sortedPendingOrders.map((ord, idx) => {
+            const isCurrent = selectedOrder?.id === ord.id;
+            const shortMeal =
+              ord.mealType === 'BREAKFAST' ? 'Sáng' : ord.mealType === 'DINNER' ? 'Chiều' : 'Trưa';
+            const isWaiting = ord.isWaitingServing;
+            return (
+              <button
+                key={ord.id}
+                type="button"
+                onClick={() => setSelectedOrder(ord)}
+                className={`min-w-0 px-2 py-2 rounded-lg text-[11px] sm:text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 ${
+                  isCurrent
+                    ? isWaiting
+                      ? 'bg-amber-500 text-white shadow-xs font-bold'
+                      : 'bg-[#0057b8] text-white shadow-xs font-bold'
+                    : isWaiting
+                    ? 'text-amber-800 hover:bg-amber-50 font-semibold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/70 font-medium'
+                }`}
+              >
+                {isWaiting ? (
+                  <Clock className="w-3.5 h-3.5 shrink-0" weight={isCurrent ? 'fill' : 'regular'} />
+                ) : (
+                  <QrCode className="w-3.5 h-3.5 shrink-0" weight={isCurrent ? 'bold' : 'regular'} />
+                )}
+                <span className="truncate">
+                  Suất {idx + 1} • {shortMeal}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* 3. Empty State khi KHÔNG CÓ ĐƠN ĐẶT CƠM */}
+      {/* 3. Empty State hoặc Loading khi tải đơn */}
       {!selectedOrder ? (
-        servedOrdersToday.length > 0 ? (
-          /* Đã nhận xong tất cả suất ăn hôm nay */
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs p-7 text-center space-y-3.5">
-            <div className="w-14 h-14 bg-emerald-50 text-emerald-600 border border-emerald-150 rounded-2xl flex items-center justify-center mx-auto">
-              <CheckCircle className="w-7 h-7" />
+        loading ? (
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs p-6 space-y-4 max-w-lg mx-auto w-full animate-pulse">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="w-32 h-3 bg-slate-200 rounded" />
+              <div className="w-12 h-4 bg-slate-100 rounded" />
             </div>
-            <div className="space-y-1">
-              <h3 className="text-sm font-bold text-slate-900">
-                Bạn đã nhận xong suất ăn hôm nay!
-              </h3>
-              <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-                Đơn #{servedOrdersToday[0].id.substring(0, 8).toUpperCase()} đã được phục vụ tại quầy. Chúc bạn có một bữa ăn ngon miệng!
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 pt-1 max-w-xs mx-auto">
-              <button
-                onClick={() => onNavigateTab('feedback')}
-                className="w-full px-4 py-2.5 bg-[#0057b8] hover:bg-[#004593] text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-95"
-              >
-                <MessageSquareHeart className="w-4 h-4" />
-                <span>Đánh giá bữa ăn</span>
-              </button>
-              <button
-                onClick={() => onNavigateTab('menu')}
-                className="w-full px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-              >
-                <Calendar className="w-3.5 h-3.5" />
-                <span>Đặt món cho ngày mai</span>
-              </button>
+            <div className="w-44 h-44 sm:w-52 sm:h-52 bg-slate-200/80 rounded-2xl mx-auto" />
+            <div className="w-48 h-8 bg-slate-100 rounded-xl mx-auto" />
+            <div className="space-y-2 pt-2">
+              <div className="h-9 bg-slate-100 rounded-xl" />
+              <div className="h-9 bg-slate-100 rounded-xl" />
             </div>
           </div>
         ) : (
-          /* Chưa có đơn đặt cơm hôm nay */
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xs p-7 text-center space-y-3.5">
-            <div className="w-14 h-14 bg-blue-50 text-[#0057b8] border border-blue-150 rounded-2xl flex items-center justify-center mx-auto">
-              <QrCode className="w-7 h-7" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-sm font-bold text-slate-900">
-                Chưa có đơn đặt suất ăn hôm nay
-              </h3>
-              <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-                Mã QR chỉ xuất hiện khi bạn có đơn đặt cơm. Vui lòng vào thực đơn để chọn món trước khi đến quầy Canteen nhé!
-              </p>
-            </div>
-
-            {hasPackage && (
-              <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-xs text-[#0057b8] text-left flex items-start gap-2 max-w-xs mx-auto">
-                <Sparkles className="w-4 h-4 text-[#0057b8] shrink-0 mt-0.5" />
-                <p className="leading-snug text-[11.5px]">
-                  Bạn đang có <strong>Vé Tháng Bán Trú (còn {remainingMeals} suất)</strong>. Hãy vào thực đơn đặt món, hệ thống tự động trừ 0đ!
-                </p>
-              </div>
-            )}
-
-            <button
-              onClick={() => onNavigateTab('menu')}
-              className="px-5 py-2.5 bg-[#0057b8] hover:bg-[#004593] text-white rounded-xl text-xs font-bold transition flex items-center gap-2 mx-auto cursor-pointer shadow-xs active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Đặt món ngay</span>
-            </button>
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-6 text-center space-y-3.5 max-w-md mx-auto w-full">
+          <div className="w-12 h-12 bg-blue-50 text-[#0057b8] border border-blue-100 rounded-2xl flex items-center justify-center mx-auto">
+            <QrCode className="w-6 h-6" />
           </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-slate-900">
+              Bạn chưa có đơn hàng nào
+            </h3>
+            <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+              Vui lòng chọn món để tạo mã QR nhận suất ăn tại quầy.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onNavigateTab('menu')}
+            className="px-5 py-2.5 bg-[#0057b8] hover:bg-[#004593] text-white rounded-xl text-xs font-bold transition inline-flex items-center justify-center gap-1.5 mx-auto cursor-pointer shadow-xs active:scale-95"
+          >
+            <Utensils className="w-3.5 h-3.5" />
+            <span>Đặt món ngay</span>
+          </button>
+        </div>
         )
       ) : selectedOrder?.isWaitingServing ? (
         /* ĐÃ QUÉT MÃ QR -> ĐANG TRONG HÀNG ĐỢI GẮP CƠM */
@@ -599,7 +583,7 @@ className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap trans
         </div>
       ) : (
         /* CÓ ĐƠN ĐẶT CƠM -> HIỂN THỊ THẺ VÉ ĂN ĐIỆN TỬ (CLEAN MINIMALIST DINING TICKET) */
-        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.04)] text-center relative overflow-hidden">
+        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.04)] text-center relative overflow-hidden max-w-lg mx-auto w-full">
           {tokenError && (
             <div className="m-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 text-left flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -615,7 +599,7 @@ className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap trans
                 {selectedOrder.mealType === 'BREAKFAST' ? 'Bữa Sáng' : selectedOrder.mealType === 'DINNER' ? 'Bữa Chiều' : 'Bữa Trưa'}
               </span>
               <span className="text-slate-300">•</span>
-              <span className="text-xs font-mono font-bold text-[#0057b8]">
+              <span className="text-xs font-mono font-semibold text-slate-500">
                 {orderCode}
               </span>
             </div>
@@ -655,13 +639,14 @@ className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap trans
                 </button>
               </div>
             ) : (
-              <div className="p-3 bg-white rounded-2xl border border-slate-200/80 shadow-2xs inline-block mx-auto">
+              <div className="p-2.5 sm:p-3 bg-white rounded-2xl border border-slate-200/80 shadow-2xs inline-block mx-auto">
                 {generatingToken ? (
-                  <div className="w-56 h-56 flex items-center justify-center">
+                  <div className="w-44 h-44 sm:w-52 sm:h-52 flex flex-col items-center justify-center gap-2 bg-slate-50 rounded-xl animate-pulse">
                     <div className="w-8 h-8 border-3 border-[#0057b8] border-t-transparent rounded-full animate-spin" />
+                    <span className="text-[11px] font-medium text-slate-500">Đang tạo mã QR...</span>
                   </div>
                 ) : (
-                  <div className="w-56 h-56 flex items-center justify-center">
+                  <div className="w-44 h-44 sm:w-52 sm:h-52 flex items-center justify-center">
                     <QRCodeSVG
                       id="dining-pass-qr-svg"
                       value={qrValue}
@@ -670,35 +655,32 @@ className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap trans
                       includeMargin={true}
                       fgColor="#000000"
                       bgColor="#ffffff"
-                      className="rounded-xl mx-auto block"
+                      className="w-full h-full rounded-xl mx-auto block"
                     />
                   </div>
                 )}
               </div>
             )}
 
-            {/* Backup OTP Token Section */}
-            {!isServed && (
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 max-w-xs mx-auto space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider">
-                    MÃ ĐỌC TẠI QUẦY (OTP):
+            {/* Backup OTP Token Section (Minimal 1-row) */}
+            {!isServed && otpCode && (
+              <div className="bg-slate-50 px-3 py-2 rounded-xl border border-slate-200/70 max-w-xs mx-auto flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">
+                    OTP
                   </span>
-                  <button
-                    type="button"
-                    onClick={copyOtp}
-                    className="text-[10px] font-bold text-[#0057b8] flex items-center gap-1 cursor-pointer active:scale-95"
-                  >
-                    {copiedOtp ? <Check className="w-3 h-3 text-[#0057b8]" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedOtp ? 'Đã chép' : 'Sao chép'}</span>
-                  </button>
+                  <span className="text-sm font-bold text-slate-900 font-mono tracking-wider truncate">
+                    {otpCode}
+                  </span>
                 </div>
-                <p className="text-xl font-bold text-slate-900 font-mono tracking-widest">
-                  {otpCode}
-                </p>
-                <p className="text-[10px] text-slate-400">
-                  Đọc mã này nếu camera quét tại quầy gặp sự cố
-                </p>
+                <button
+                  type="button"
+                  onClick={copyOtp}
+                  className="text-[11px] font-bold text-[#0057b8] flex items-center gap-1 cursor-pointer active:scale-95 shrink-0"
+                >
+                  {copiedOtp ? <Check className="w-3.5 h-3.5 text-[#0057b8]" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedOtp ? 'Đã chép' : 'Sao chép'}</span>
+                </button>
               </div>
             )}
           </div>
@@ -710,73 +692,69 @@ className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap trans
             <div className="w-4 h-4 rounded-full bg-[#F7FAFE] -mr-2 border-l border-slate-200/80" />
           </div>
 
-          {/* TICKET FOOTER: Student Details & Khay Cơm */}
-          <div className="p-4 pt-3 space-y-3">
-            <div className="text-left space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-medium">Học sinh:</span>
-                <span className="font-bold text-slate-800">
-                  {user?.fullName || zaloProfile?.name || 'Học sinh FPT'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-medium">MSSV / Thẻ:</span>
-                <span className="font-mono font-bold text-[#0057b8]">
-                  {user?.studentCode || (user?.cards?.[0]?.cardUid ? user.cards[0].cardUid.replace(/^RFID-/i, '') : 'HS-2026-0098')}
-                </span>
-              </div>
+          {/* TICKET FOOTER: Minimal Student + Dishes + Actions */}
+          <div className="p-4 pt-3 space-y-2.5">
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="font-bold text-slate-800 truncate">
+                {user?.fullName || zaloProfile?.name || 'Học sinh FPT'}
+              </span>
+              <span className="font-mono font-semibold text-slate-500 shrink-0">
+                {user?.studentCode || (user?.cards?.[0]?.cardUid ? user.cards[0].cardUid.replace(/^RFID-/i, '') : 'HS-2026-0098')}
+              </span>
             </div>
 
-            {/* Tray items summary */}
-            {orderItemsSummary && (
-              <div className="bg-slate-50 border border-slate-200/70 rounded-xl p-2.5 text-xs text-left">
-                <div className="flex items-center gap-1 font-bold text-slate-700 text-[11px] mb-0.5">
-                  <Utensils className="w-3.5 h-3.5 text-[#0057b8]" />
-                  <span>Khay cơm đã đặt:</span>
-                </div>
-                <p className="text-slate-600 font-medium leading-relaxed">
-                  {orderItemsSummary}
-                </p>
-              </div>
+            {/* Tray items list */}
+            {selectedOrder?.items && selectedOrder.items.length > 0 && (
+              <ul className="bg-slate-50/90 border border-slate-200/70 rounded-xl px-3 py-1.5 divide-y divide-slate-200/60 text-xs text-left">
+                {selectedOrder.items.map((it: any, idx: number) => {
+                  const dish = it.dish || it;
+                  const dishImg = dish?.image;
+                  const dishName = dish?.name || 'Món ăn';
+                  return (
+                    <li key={dish?.id || idx} className="py-1.5 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <DishImage
+                          src={dishImg}
+                          alt={dishName}
+                          className="w-6 h-6 rounded-md bg-white border border-slate-200/70 shrink-0"
+                        />
+                        <span className="text-slate-700 font-medium truncate">{dishName}</span>
+                      </div>
+                      <span className="text-[11px] font-semibold text-slate-400 shrink-0">
+                        x{it.quantity || 1}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
 
-            {/* Cut-off Status & Order Edit / Cancel Toolbar */}
+            {/* Order Edit / Cancel Toolbar */}
             {!isServed && !isCancelled && selectedOrder && (
-              <div className="p-2.5 rounded-xl border text-left space-y-2 bg-slate-50 border-slate-200/70">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${canEdit ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                    <span className="text-[11px] font-semibold text-slate-700">
-                      {canEdit
-                        ? `Có thể đổi món trước ${cutoffTimeDisplay}`
-                        : `Đã chốt món lúc ${cutoffTimeDisplay}`}
-                    </span>
-                  </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    canEdit
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-slate-200 text-slate-600'
-                  }`}>
-                    {canEdit ? 'Được đổi' : 'Đã khóa'}
+              <div className="space-y-1.5 pt-0.5">
+                <div className="flex items-center justify-between text-[10.5px] text-slate-500 px-0.5">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${canEdit ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                    {canEdit ? `Đổi món trước ${cutoffTimeDisplay}` : `Đã chốt lúc ${cutoffTimeDisplay}`}
                   </span>
                 </div>
 
-                <div className="flex gap-2 pt-0.5">
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={handleOpenEditModal}
                     disabled={!canEdit}
-                    className="flex-1 py-1.5 px-3 bg-[#0057b8] hover:bg-[#004593] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs active:scale-95"
+                    className="py-2 px-3 bg-[#0057b8] hover:bg-[#004593] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
-                    <span>Đổi món ăn</span>
+                    <span>Đổi món</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleCancelOrder}
                     disabled={!canEdit || isCancelling}
-                    className="py-1.5 px-3 bg-white border border-rose-200 hover:bg-rose-50 text-rose-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                    className="py-2 px-3 bg-white border border-rose-200 hover:bg-rose-50 text-rose-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>{isCancelling ? 'Đang hủy...' : 'Hủy đơn'}</span>
@@ -795,7 +773,7 @@ className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap trans
                   className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${generatingToken ? 'animate-spin' : ''}`} />
-                  <span>Làm mới mã</span>
+                  <span>Làm mới</span>
                 </button>
 
                 <button
@@ -804,7 +782,7 @@ className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap trans
                   className="py-2 px-3 rounded-xl bg-blue-50 text-[#0057b8] hover:bg-blue-100 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer active:scale-95"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>Lưu ảnh QR</span>
+                  <span>Lưu QR</span>
                 </button>
               </div>
             )}
@@ -831,16 +809,15 @@ className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap trans
         </button>
       </div>
 
-      {/* Serving Guidelines BottomSheet Modal */}
+      {/* Serving Guidelines Centered Modal */}
       {showGuideModal && (
         <div
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowGuideModal(false);
           }}
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[60] flex items-end justify-center p-0 animate-in fade-in duration-200"
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[60] flex items-center justify-center p-4 animate-in fade-in duration-150"
         >
-          <div className="w-full max-w-md bg-white rounded-t-3xl p-5 space-y-4 animate-in slide-in-from-bottom duration-250 overscroll-contain modal-scrollable touch-pan-y">
-            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto" />
+          <div className="w-full max-w-sm bg-white rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-2xl animate-in zoom-in-95 duration-150 max-h-[85vh] overflow-y-auto overscroll-contain modal-scrollable touch-pan-y">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center">
@@ -879,22 +856,41 @@ className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap trans
 
       {/* Modal Chỉnh sửa món ăn đã đặt */}
       {showEditModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-3">
-          <div className="bg-white w-full max-w-md rounded-3xl p-5 space-y-4 shadow-2xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Chỉnh sửa món ăn đã đặt</h3>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowEditModal(false);
+          }}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div className="bg-white w-full max-w-sm rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-2xl max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-slate-100">
+              <div className="min-w-0">
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">
+                  Đổi món ăn ({editSelectedDishIds.length}/3)
+                </h3>
                 <p className="text-[11px] text-slate-500">
                   Chọn tối đa 3 món • Chốt lúc {cutoffTimeDisplay}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowEditModal(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className={`h-1.5 rounded-full transition-all ${
+                        i < editSelectedDishIds.length ? 'w-4 bg-[#0057b8]' : 'w-1.5 bg-slate-200'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {editErrorMsg && (
@@ -911,75 +907,114 @@ className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap trans
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto space-y-2 py-1">
+            <div className="flex-1 overflow-y-auto py-1 modal-scrollable">
               {loadingMenuDishes ? (
-                <div className="py-12 text-center text-xs text-slate-400 space-y-2">
-                  <div className="w-6 h-6 border-2 border-[#0057b8] border-t-transparent rounded-full animate-spin mx-auto" />
-                  <p>Đang tải thực đơn hôm nay...</p>
+                <div className="space-y-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="rounded-2xl border border-slate-100 bg-white p-2.5 flex items-center gap-3 animate-pulse">
+                      <div className="w-12 h-12 bg-slate-100 rounded-xl shrink-0" />
+                      <div className="flex-1 space-y-1.5">
+                        <div className="w-3/4 h-3 bg-slate-100 rounded" />
+                        <div className="w-1/3 h-2.5 bg-slate-100 rounded" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : menuDishes.length === 0 ? (
                 <div className="py-10 text-center text-xs text-slate-400">
                   Không tìm thấy danh sách món thay thế.
                 </div>
               ) : (
-                menuDishes.map((dish) => {
-                  const isChecked = editSelectedDishIds.includes(dish.id);
-                  const extraPrice = Number(dish.extraPrice || 0);
+                <ul className="space-y-2">
+                  {menuDishes.map((dish) => {
+                    const isChecked = editSelectedDishIds.includes(dish.id);
+                    const extraPrice = Number(dish.extraPrice || 0);
+                    const catLabel =
+                      dish.category === 'MAIN'
+                        ? 'Món chính'
+                        : dish.category === 'VEGETABLE'
+                        ? 'Rau xào'
+                        : dish.category === 'SOUP'
+                        ? 'Món canh'
+                        : dish.category === 'SIDE'
+                        ? 'Món phụ'
+                        : dish.category === 'DRINK'
+                        ? 'Đồ uống'
+                        : dish.category === 'DESSERT'
+                        ? 'Tráng miệng'
+                        : 'Suất chuẩn';
 
-                  const toggleDish = () => {
-                    if (isChecked) {
-                      setEditSelectedDishIds((prev) => prev.filter((id) => id !== dish.id));
-                    } else {
-                      if (editSelectedDishIds.length >= 3) {
-                        alert('Chỉ được chọn tối đa 3 món cho một suất ăn');
-                        return;
+                    const toggleDish = () => {
+                      if (isChecked) {
+                        setEditSelectedDishIds((prev) => prev.filter((id) => id !== dish.id));
+                      } else {
+                        if (editSelectedDishIds.length >= 3) {
+                          void showAlert('Chỉ được chọn tối đa 3 món cho một suất ăn.');
+                          return;
+                        }
+                        setEditSelectedDishIds((prev) => [...prev, dish.id]);
                       }
-                      setEditSelectedDishIds((prev) => [...prev, dish.id]);
-                    }
-                  };
+                    };
 
-                  return (
-                    <div
-                      key={dish.id}
-                      onClick={toggleDish}
-                      className={`p-3 rounded-2xl border transition cursor-pointer flex items-center justify-between gap-3 ${
-                        isChecked
-                          ? 'bg-[#EFF6FF] border-[#0057b8] ring-1 ring-[#0057b8]/20'
-                          : 'bg-white border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 transition ${
-                            isChecked ? 'bg-[#0057b8] text-white' : 'border border-slate-300 bg-slate-50'
+                    return (
+                      <li
+                        key={dish.id}
+                        onClick={toggleDish}
+                        className={`p-2.5 rounded-2xl border transition-all duration-150 flex items-center justify-between gap-2.5 cursor-pointer active:scale-99 ${
+                          isChecked
+                            ? 'border-[#0057b8] ring-1 ring-[#0057b8]/40 bg-blue-50/30'
+                            : 'border-slate-200/80 bg-white hover:border-blue-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <DishImage
+                            src={dish.image}
+                            alt={dish.name}
+                            className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200/70 shrink-0"
+                          />
+
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-slate-900 truncate">{dish.name}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[10.5px] font-medium text-slate-500">
+                                {catLabel}
+                              </span>
+                              {extraPrice > 0 && (
+                                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded-md border border-amber-200">
+                                  +{extraPrice.toLocaleString('vi-VN')}đ
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all ${
+                            isChecked
+                              ? 'bg-emerald-600 text-white shadow-xs'
+                              : 'bg-[#0057b8] text-white shadow-2xs'
                           }`}
                         >
-                          {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-800 truncate">{dish.name}</p>
-                          <p className="text-[10px] text-slate-400">{dish.category || 'Món ăn'}</p>
-                        </div>
-                      </div>
-
-                      {extraPrice > 0 && (
-                        <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 shrink-0">
-                          +{extraPrice.toLocaleString('vi-VN')}đ
+                          {isChecked ? (
+                            <Check className="w-3.5 h-3.5" weight="bold" />
+                          ) : (
+                            <Plus className="w-3.5 h-3.5" weight="bold" />
+                          )}
                         </span>
-                      )}
-                    </div>
-                  );
-                })
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
             </div>
 
-            <div className="pt-2 border-t border-slate-100 flex gap-2">
+            <div className="pt-2.5 border-t border-slate-100 flex gap-2">
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
                 className="py-2.5 px-4 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 cursor-pointer"
               >
-                Hủy bỏ
+                Hủy
               </button>
 
               <button
@@ -988,7 +1023,7 @@ className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap trans
                 disabled={isSubmittingEdit || editSelectedDishIds.length === 0}
                 className="flex-1 py-2.5 px-4 rounded-xl bg-[#0057b8] hover:bg-[#004593] disabled:opacity-50 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-xs"
               >
-                {isSubmittingEdit ? 'Đang cập nhật...' : `Lưu thay đổi (${editSelectedDishIds.length} món)`}
+                {isSubmittingEdit ? 'Đang lưu...' : `Lưu thay đổi (${editSelectedDishIds.length} món)`}
               </button>
             </div>
           </div>

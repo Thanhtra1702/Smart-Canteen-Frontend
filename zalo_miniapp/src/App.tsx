@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppProvider, useApp, type AppRole } from './context/AppContext';
 import { HeaderBar } from './components/HeaderBar';
 import { NotificationModal } from './components/NotificationModal';
@@ -31,8 +31,11 @@ const TAB_CANONICAL_URL: Record<TabKey, string> = {
   staff_menu: '/branch-menu',
 };
 
+const getDefaultTabForRole = (role: AppRole): TabKey =>
+  role === 'STAFF' ? 'overview' : role === 'PARENT' ? 'children' : 'menu';
+
 const resolveMiniAppTabFromUrl = (role: AppRole): TabKey => {
-  if (typeof window === 'undefined') return role === 'STAFF' ? 'overview' : role === 'PARENT' ? 'children' : 'menu';
+  if (typeof window === 'undefined') return getDefaultTabForRole(role);
   const pathname = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
   const searchTab = new URLSearchParams(window.location.search).get('tab')?.toLowerCase();
   const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
@@ -73,7 +76,7 @@ const resolveMiniAppTabFromUrl = (role: AppRole): TabKey => {
   if (role === 'PARENT' && validParentTabs.includes(resolved)) return resolved;
   if (role === 'STAFF' && validStaffTabs.includes(resolved)) return resolved;
 
-  return role === 'STAFF' ? 'overview' : role === 'PARENT' ? 'children' : 'menu';
+  return getDefaultTabForRole(role);
 };
 
 const MainScreen: React.FC = () => {
@@ -87,6 +90,18 @@ const MainScreen: React.FC = () => {
   } = useApp();
   const [activeTab, setActiveTab] = useState<TabKey>(() => resolveMiniAppTabFromUrl(currentRole));
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isSlowNetwork, setIsSlowNetwork] = useState(false);
+  const wasLoggedOutRef = useRef(false);
+  const prevUserIdentityRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!loading) {
+      setIsSlowNetwork(false);
+      return;
+    }
+    const timer = setTimeout(() => setIsSlowNetwork(true), 3000);
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   const handleNavigateTab = useCallback((newTab: TabKey) => {
     setActiveTab(newTab);
@@ -101,20 +116,33 @@ const MainScreen: React.FC = () => {
     }
   }, []);
 
-  // Sync tab with URL on mount or role change, and listen to popstate
+  // Always land on the first tab for any role when logging in or switching accounts
   useEffect(() => {
-    const initial = resolveMiniAppTabFromUrl(currentRole);
-    setActiveTab(initial);
-    if (typeof window !== 'undefined') {
-      const canonical = TAB_CANONICAL_URL[initial] || `/${initial}`;
-      const url = new URL(window.location.href);
-      url.pathname = canonical;
-      url.hash = '';
-      url.searchParams.delete('tab');
-      const cleanSearch = url.searchParams.toString() ? `?${url.searchParams.toString()}` : '';
-      window.history.replaceState({ tab: initial }, '', `${url.pathname}${cleanSearch}`);
+    if (loading) return;
+
+    const userIdentity: string | null = user?.id || user?.email || null;
+    if (!userIdentity) {
+      wasLoggedOutRef.current = true;
+      prevUserIdentityRef.current = null;
+      return;
     }
 
+    const isFreshLoginOrSwitch =
+      wasLoggedOutRef.current ||
+      (prevUserIdentityRef.current !== null && prevUserIdentityRef.current !== userIdentity);
+
+    wasLoggedOutRef.current = false;
+    prevUserIdentityRef.current = userIdentity;
+
+    const targetTab = isFreshLoginOrSwitch
+      ? getDefaultTabForRole(currentRole)
+      : resolveMiniAppTabFromUrl(currentRole);
+
+    handleNavigateTab(targetTab);
+  }, [currentRole, user?.id, user?.email, loading, handleNavigateTab]);
+
+  // Listen to browser back/forward navigation
+  useEffect(() => {
     const onPop = () => {
       setActiveTab(resolveMiniAppTabFromUrl(currentRole));
     };
@@ -124,14 +152,64 @@ const MainScreen: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F1F4F8] flex justify-center text-[#131B2E] antialiased selection:bg-[#0057b8] selection:text-white">
-      {/* Mobile Frame Container (Responsive 360px - 430px) */}
-      <div className="w-full max-w-md min-h-screen bg-[#F7FAFE] border-x border-[#E2E8F0] shadow-2xl flex flex-col relative">
+      {/* Responsive App Shell (Mobile / Foldable / Tablet) */}
+      <div className="w-full max-w-lg sm:max-w-2xl md:max-w-3xl lg:max-w-4xl min-h-screen bg-[#F7FAFE] sm:border-x border-[#E2E8F0] shadow-2xl flex flex-col relative">
         {loading ? (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-3">
-            <div className="w-9 h-9 border-3 border-[#0057b8] border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs font-semibold text-slate-500">
-              Đang khởi tạo Smart Canteen Zalo Mini App...
-            </p>
+          <div className="flex-1 flex flex-col bg-[#F7FAFE]">
+            {/* Top Progress Bar */}
+            <div className="h-0.5 w-full bg-blue-100 overflow-hidden">
+              <div className="h-full w-1/3 bg-[#0057b8] animate-pulse rounded-full" />
+            </div>
+
+            {/* Header Skeleton */}
+            <div className="px-3.5 sm:px-5 py-2.5 bg-white border-b border-slate-200/70 flex items-center justify-between gap-2 animate-pulse">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-slate-200 shrink-0" />
+                <div className="space-y-1.5">
+                  <div className="w-24 h-2.5 bg-slate-200 rounded" />
+                  <div className="w-36 h-3 bg-slate-200 rounded" />
+                </div>
+              </div>
+              <div className="flex items-center">
+                <div className="w-9 h-9 rounded-full bg-slate-200" />
+              </div>
+            </div>
+
+            {/* Content Skeleton */}
+            <div className="p-3.5 sm:p-5 space-y-3.5 flex-1">
+              <div className="bg-white rounded-2xl border border-slate-200/70 p-3 space-y-2.5 animate-pulse">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="h-8 bg-slate-200 rounded-xl" />
+                  <div className="h-8 bg-slate-100 rounded-xl" />
+                </div>
+                <div className="h-9 bg-slate-100 rounded-xl" />
+              </div>
+
+              <div className="bg-white rounded-3xl border border-slate-200/70 p-4 space-y-3 animate-pulse">
+                <div className="w-32 h-3 bg-slate-200 rounded" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div key={i} className="rounded-2xl border border-slate-100 p-2 space-y-2">
+                      <div className="w-full h-24 bg-slate-200 rounded-xl" />
+                      <div className="w-3/4 h-3 bg-slate-200 rounded" />
+                      <div className="w-1/2 h-2.5 bg-slate-100 rounded" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center justify-center pt-2 gap-1.5">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                  <div className="w-3.5 h-3.5 border-2 border-[#0057b8] border-t-transparent rounded-full animate-spin" />
+                  <span>Đang tải dữ liệu...</span>
+                </div>
+                {isSlowNetwork && (
+                  <p className="text-[11px] text-amber-600 font-medium text-center">
+                    Kết nối mạng đang chậm, vui lòng chờ thêm giây lát...
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         ) : !user ? (
           <LoginPage />

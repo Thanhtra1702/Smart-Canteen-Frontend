@@ -3,22 +3,17 @@ import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import {
-  ChefHat,
-  Sun,
-  Moon,
-  Utensils,
-  ShoppingBag,
-  ShieldCheck,
-  RotateCw,
-  X,
-  AlertTriangle,
-  CheckCircle2,
-  Calendar,
-  Lock,
-  Layers,
-  Sparkles,
-  Filter,
-} from 'lucide-react';
+  SunIcon as Sun,
+  MoonIcon as Moon,
+  ForkKnifeIcon as Utensils,
+  XIcon as X,
+  WarningIcon as AlertTriangle,
+  CheckCircleIcon as CheckCircle2,
+  LockIcon as Lock,
+  CalendarBlankIcon as Calendar,
+  CaretLeftIcon as ChevronLeft,
+  CaretRightIcon as ChevronRight,
+} from '@phosphor-icons/react';
 
 interface KitchenForecastModalProps {
   isOpen: boolean;
@@ -33,10 +28,12 @@ export const KitchenForecastModal: React.FC<KitchenForecastModalProps> = ({
 }) => {
   const { selectedCanteen, user, hasPermission } = useApp();
 
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
-  const tomorrowObj = new Date();
-  tomorrowObj.setDate(tomorrowObj.getDate() + 1);
-  const tomorrowStr = tomorrowObj.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const [todayStr] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }));
+  const [tomorrowStr] = useState(() => {
+    const tomorrowObj = new Date();
+    tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+    return tomorrowObj.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  });
 
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [selectedMealType, setSelectedMealType] = useState<'BREAKFAST' | 'LUNCH' | 'DINNER'>(initialMealSlot);
@@ -44,14 +41,27 @@ export const KitchenForecastModal: React.FC<KitchenForecastModalProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [onlyShortage, setOnlyShortage] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
+  const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number }>(() => {
+    const [y, m] = todayStr.split('-').map(Number);
+    return { year: y, month: m - 1 };
+  });
 
   useModalScrollLock(isOpen);
 
   useEffect(() => {
     if (isOpen) {
       setSelectedMealType(initialMealSlot);
+      setShowDatePicker(false);
     }
   }, [isOpen, initialMealSlot]);
+
+  useEffect(() => {
+    const [y, m] = selectedDate.split('-').map(Number);
+    if (y && m) {
+      setCalendarMonth({ year: y, month: m - 1 });
+    }
+  }, [selectedDate]);
 
   const targetCanteenId = selectedCanteen?.id || user?.canteenId;
 
@@ -107,30 +117,44 @@ export const KitchenForecastModal: React.FC<KitchenForecastModalProps> = ({
 
   const canAccessBOM = hasPermission('INVENTORY_MANAGEMENT') || hasPermission('CANTEEN_CONFIG');
 
+  const totalToCook = forecast
+    ? Math.round(forecast.totalEstimatedServings * (1 + (forecast.bufferMarginPercent || 0) / 100))
+    : 0;
+
+  const formattedDateLabel = selectedDate.split('-').reverse().join('/');
+  const firstDayOffset = (new Date(calendarMonth.year, calendarMonth.month, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(calendarMonth.year, calendarMonth.month + 1, 0).getDate();
+  const toIsoDate = (y: number, m: number, d: number) =>
+    `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+  const shiftCalendarMonth = (delta: number) => {
+    setCalendarMonth((prev) => {
+      const next = new Date(prev.year, prev.month + delta, 1);
+      return { year: next.getFullYear(), month: next.getMonth() };
+    });
+  };
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="bg-white rounded-xl max-w-md w-full shadow-2xl border border-slate-100 flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="px-5 pt-4 pb-3.5 border-b border-slate-100 flex items-start justify-between gap-3 bg-white">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-lg bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center shrink-0 border border-[#D0E7FF] shadow-xs">
-              <ChefHat className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h3 className="text-sm font-black text-[#131B2E]">Dự báo Bếp & Định mức BOM</h3>
-                <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Thời gian thực
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                {selectedCanteen?.name || 'Cơ sở của bạn'}
-              </p>
-            </div>
+    <>
+      <div
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+        role="dialog"
+        aria-modal="true"
+      >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-100 flex flex-col max-h-[88vh] overflow-hidden animate-in zoom-in-95 duration-200"
+      >
+        {/* Header (tối giản) */}
+        <div className="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between gap-3 bg-white">
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-slate-900 truncate">Dự báo Bếp &amp; Định mức BOM</h3>
+            <p className="text-[11px] text-slate-500 truncate mt-0.5">
+              {selectedCanteen?.name || 'Cơ sở của bạn'}
+            </p>
           </div>
 
           <button
@@ -144,31 +168,33 @@ export const KitchenForecastModal: React.FC<KitchenForecastModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 overflow-y-auto space-y-3.5">
+        <div className="p-4 overflow-y-auto space-y-3">
           {/* Permission Guard */}
           {!canAccessBOM && (
-            <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-2">
-              <div className="flex items-center gap-2 font-bold text-amber-800">
-                <Lock className="w-4 h-4 text-amber-600" />
-                <span>Tính năng bị khóa (Thiếu quyền INVENTORY_MANAGEMENT)</span>
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-amber-800">
+                <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>Thiếu quyền INVENTORY_MANAGEMENT</span>
               </div>
-              <p className="text-[11.5px] leading-relaxed text-amber-700">
-                Tài khoản của bạn chưa được Quản trị viên Web cấp quyền xem định mức nguyên liệu BOM. Vui lòng liên hệ Quản trị viên cấp cao để được kích hoạt.
+              <p className="text-[11px] text-amber-700 leading-relaxed">
+                Vui lòng liên hệ Quản trị viên để được cấp quyền xem định mức BOM.
               </p>
             </div>
           )}
 
           {/* Date & Shift Filter Bar */}
-          <div className="bg-[#F7FAFE] p-3 rounded-lg border border-slate-200/80 space-y-2.5">
-            {/* Date Segmented Controls */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl shrink-0">
                 <button
                   type="button"
-                  onClick={() => setSelectedDate(todayStr)}
-                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
+                  onClick={() => {
+                    setSelectedDate(todayStr);
+                    setShowDatePicker(false);
+                  }}
+                  className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg transition cursor-pointer whitespace-nowrap ${
                     selectedDate === todayStr
-                      ? 'bg-[#0057b8] text-white shadow-xs'
+                      ? 'bg-white text-slate-900 shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -176,10 +202,13 @@ export const KitchenForecastModal: React.FC<KitchenForecastModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedDate(tomorrowStr)}
-                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
+                  onClick={() => {
+                    setSelectedDate(tomorrowStr);
+                    setShowDatePicker(false);
+                  }}
+                  className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg transition cursor-pointer whitespace-nowrap ${
                     selectedDate === tomorrowStr
-                      ? 'bg-[#0057b8] text-white shadow-xs'
+                      ? 'bg-white text-slate-900 shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -187,30 +216,21 @@ export const KitchenForecastModal: React.FC<KitchenForecastModalProps> = ({
                 </button>
               </div>
 
-              {/* Date Input for Other Dates */}
-              <div className="relative">
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="px-2 py-1 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#0057b8]"
-                />
-              </div>
-
-              {/* Refresh Button */}
               <button
                 type="button"
-                onClick={() => fetchForecast(false)}
-                disabled={loading}
-                className="p-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 transition cursor-pointer shadow-2xs shrink-0"
-                title="Cập nhật lại dữ liệu"
+                onClick={() => setShowDatePicker((prev) => !prev)}
+                className={`flex-1 min-w-0 px-2.5 py-1.5 text-[11px] font-bold rounded-xl border transition cursor-pointer flex items-center justify-between gap-1.5 ${
+                  showDatePicker
+                    ? 'bg-blue-50/70 border-[#0057b8]/40 text-[#0057b8]'
+                    : 'bg-slate-50 border-slate-200/80 text-slate-700 hover:bg-slate-100'
+                }`}
               >
-                <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[#0057b8]' : ''}`} />
+                <span className="font-mono truncate">{formattedDateLabel}</span>
+                <Calendar className="w-3.5 h-3.5 shrink-0" />
               </button>
             </div>
 
-            {/* Meal Shift Segmented Buttons */}
-            <div className="grid grid-cols-3 gap-1.5 bg-slate-200/70 p-1 rounded-xl">
+            <div className="grid grid-cols-3 gap-1 bg-slate-100 p-0.5 rounded-xl">
               {[
                 { id: 'BREAKFAST', label: 'Ca Sáng', icon: <Sun className="w-3.5 h-3.5" /> },
                 { id: 'LUNCH', label: 'Ca Trưa', icon: <Utensils className="w-3.5 h-3.5" /> },
@@ -220,9 +240,9 @@ export const KitchenForecastModal: React.FC<KitchenForecastModalProps> = ({
                   key={m.id}
                   type="button"
                   onClick={() => setSelectedMealType(m.id as any)}
-                  className={`py-1.5 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                  className={`py-1.5 text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap ${
                     selectedMealType === m.id
-                      ? 'bg-white text-[#0057b8] shadow-xs'
+                      ? 'bg-white text-[#0057b8] shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -233,70 +253,54 @@ export const KitchenForecastModal: React.FC<KitchenForecastModalProps> = ({
             </div>
           </div>
 
-          {/* 3 Metric Summary Cards */}
+          {/* 3-Column Metric Strip */}
           {forecast && (
-            <div className="grid grid-cols-3 gap-2">
-              {/* Single Orders */}
-              <div className="bg-[#F7FAFE] border border-slate-200 p-2.5 rounded-lg text-center space-y-0.5">
-                <div className="flex items-center justify-center gap-1 text-[10px] text-slate-500 font-bold uppercase">
-                  <ShoppingBag className="w-3 h-3 text-[#0057b8]" />
-                  <span>Đơn đặt lẻ</span>
+            <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl py-2.5 px-1 grid grid-cols-3 divide-x divide-slate-200/80">
+              {[
+                { key: 'single', label: 'Đặt lẻ', value: forecast.totalSingleOrders },
+                { key: 'pkg', label: 'Vé tháng', value: forecast.packageServingEstimate },
+                {
+                  key: 'cook',
+                  label: `Cần nấu (+${forecast.bufferMarginPercent ?? 0}%)`,
+                  value: totalToCook,
+                  accent: true,
+                },
+              ].map(({ key, label, value, accent }) => (
+                <div key={key} className="px-1.5 text-center min-w-0">
+                  <div
+                    className={`text-base font-black font-mono tabular-nums leading-tight ${
+                      accent ? 'text-[#0057b8]' : 'text-slate-900'
+                    }`}
+                  >
+                    {value}
+                  </div>
+                  <span className="text-[10.5px] font-medium text-slate-500 block mt-0.5 truncate">
+                    {label}
+                  </span>
                 </div>
-                <div className="text-lg font-black text-[#131B2E] font-mono">
-                  {forecast.totalSingleOrders}
-                </div>
-                <span className="text-[9.5px] text-slate-400 block">qua App học sinh</span>
-              </div>
-
-              {/* Package Subscribers */}
-              <div className="bg-[#F7FAFE] border border-slate-200 p-2.5 rounded-lg text-center space-y-0.5">
-                <div className="flex items-center justify-center gap-1 text-[10px] text-slate-500 font-bold uppercase">
-                  <ShieldCheck className="w-3 h-3 text-[#0057b8]" />
-                  <span>Vé tháng</span>
-                </div>
-                <div className="text-lg font-black text-[#131B2E] font-mono">
-                  {forecast.packageServingEstimate}
-                </div>
-                <span className="text-[9.5px] text-slate-400 block">gói kích hoạt</span>
-              </div>
-
-              {/* Total Kitchen Preparation Target */}
-              <div className="bg-[#0057b8] text-white p-2.5 rounded-lg text-center space-y-0.5 shadow-xs">
-                <div className="flex items-center justify-center gap-1 text-[10px] text-white/90 font-bold uppercase">
-                  <ChefHat className="w-3 h-3" />
-                  <span>Cần nấu</span>
-                </div>
-                <div className="text-lg font-black text-white font-mono">
-                  {Math.round(
-                    forecast.totalEstimatedServings * (1 + (forecast.bufferMarginPercent || 0) / 100)
-                  )}
-                </div>
-                <span className="text-[9px] text-white/80 block">
-                  +{forecast.bufferMarginPercent}% dôi dư
-                </span>
-              </div>
+              ))}
             </div>
           )}
 
-          {/* Stock Alert Banner */}
+          {/* Compact Stock Alert */}
           {forecast && (
             <div
-              className={`p-3 rounded-lg border flex items-center justify-between gap-2 ${
+              className={`px-3 py-2 rounded-xl border flex items-center justify-between gap-2 ${
                 shortageCount > 0
-                  ? 'bg-rose-50/80 border-rose-200 text-rose-800'
-                  : 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
+                  ? 'bg-rose-50/70 border-rose-200/80 text-rose-700'
+                  : 'bg-emerald-50/70 border-emerald-200/80 text-emerald-700'
               }`}
             >
-              <div className="flex items-center gap-2 text-xs font-bold">
+              <div className="flex items-center gap-1.5 text-[11.5px] font-semibold min-w-0">
                 {shortageCount > 0 ? (
                   <>
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span>Có {shortageCount} nguyên liệu kho bị thiếu!</span>
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                    <span className="truncate">Thiếu {shortageCount} nguyên liệu kho</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Kho đủ nguyên liệu cho ca ăn này</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="truncate">Đủ nguyên liệu nấu ca này</span>
                   </>
                 )}
               </div>
@@ -305,25 +309,22 @@ export const KitchenForecastModal: React.FC<KitchenForecastModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setOnlyShortage((prev) => !prev)}
-                  className={`text-[10.5px] font-bold px-2 py-1 rounded-xl transition cursor-pointer border ${
+                  className={`text-[10.5px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer border shrink-0 whitespace-nowrap ${
                     onlyShortage
                       ? 'bg-rose-600 text-white border-rose-600'
-                      : 'bg-white text-rose-700 border-rose-200 hover:bg-rose-100'
+                      : 'bg-white text-rose-700 border-rose-200 hover:bg-rose-50'
                   }`}
                 >
-                  {onlyShortage ? 'Hiện tất cả' : 'Chỉ xem thiếu'}
+                  {onlyShortage ? 'Tất cả' : 'Chỉ xem thiếu'}
                 </button>
               )}
             </div>
           )}
 
           {/* Search & Counter Header */}
-          <div className="flex items-center justify-between gap-2 pt-1">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <span>Định mức BOM nguyên liệu</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                {filteredIngredients.length} mục
-              </span>
+          <div className="flex items-center justify-between gap-2 pt-0.5">
+            <span className="text-xs font-bold text-slate-800 whitespace-nowrap">
+              Định mức BOM ({filteredIngredients.length})
             </span>
 
             <input
@@ -331,91 +332,64 @@ export const KitchenForecastModal: React.FC<KitchenForecastModalProps> = ({
               placeholder="Tìm nguyên liệu..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="text-xs px-2.5 py-1 bg-[#F7FAFE] border border-slate-200 rounded-xl max-w-[140px] focus:outline-none focus:border-[#0057b8]"
+              className="text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl w-40 focus:outline-none focus:border-[#0057b8]"
             />
           </div>
 
-          {/* Ingredients List */}
+          {/* Ingredients List (tối giản 1 dòng thông số rõ ràng) */}
           {loading ? (
-            <div className="space-y-2 py-2">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="p-3 rounded-lg border border-slate-200 bg-white space-y-2 animate-pulse">
-                  <div className="flex justify-between items-center">
-                    <div className="h-3.5 bg-slate-200 rounded w-1/3" />
-                    <div className="h-4 bg-slate-100 rounded w-16" />
-                  </div>
+            <div className="space-y-2 py-1">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="p-3 rounded-xl border border-slate-200 bg-white space-y-2 animate-pulse">
+                  <div className="h-3.5 bg-slate-200 rounded w-1/3" />
                   <div className="h-3 bg-slate-100 rounded w-1/2" />
                 </div>
               ))}
             </div>
           ) : filteredIngredients.length === 0 ? (
-            <div className="py-10 text-center text-xs text-slate-400 bg-slate-50 rounded-lg border border-slate-100">
+            <div className="py-8 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-slate-100">
               {onlyShortage
-                ? 'Kho đủ nguyên vật liệu đáp ứng định mức ca.'
-                : 'Chưa có thực đơn hoặc công thức BOM cho ca ăn này.'}
+                ? 'Kho đủ nguyên liệu đáp ứng định mức ca.'
+                : 'Chưa có công thức BOM cho ca ăn này.'}
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="rounded-xl border border-slate-200/80 divide-y divide-slate-100 bg-white overflow-hidden">
               {filteredIngredients.map((item: any) => {
-                const isShort = item.isShortage;
+                const isShort = Boolean(item.isShortage);
+                const requiredQty = item.totalRequired ?? item.requiredQty ?? 0;
+                const currentStock = item.currentStock ?? 0;
+                const shortageQty =
+                  item.shortageAmount ??
+                  item.shortageQty ??
+                  Math.max(0, Number((requiredQty - currentStock).toFixed(2)));
 
                 return (
                   <div
                     key={item.ingredientId}
-                    className={`p-3 rounded-lg border transition-all ${
-                      isShort
-                        ? 'bg-rose-50/40 border-rose-200 shadow-2xs'
-                        : 'bg-white border-slate-200/80 hover:border-slate-300'
+                    className={`px-3 py-2.5 flex items-center justify-between gap-3 ${
+                      isShort ? 'bg-rose-50/35' : 'bg-white'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <h4 className="text-xs font-bold text-[#131B2E] truncate">
-                            {item.name}
-                          </h4>
-                          <span className="text-[9.5px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-500 font-medium">
-                            {item.category || 'Nguyên liệu'}
-                          </span>
-                        </div>
-
-                        {/* Breakdown info */}
-                        <div className="flex items-center gap-2 text-[10.5px] text-slate-500 mt-1">
-                          <span>
-                            Cần: <strong className="text-[#131B2E] font-bold">{item.totalRequired} {item.unit}</strong>
-                          </span>
-                          <span>•</span>
-                          <span>
-                            Tồn kho: <strong className={isShort ? 'text-rose-600 font-bold' : 'text-slate-700'}>{item.currentStock} {item.unit}</strong>
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Status Badge */}
-                      <div className="shrink-0 text-right">
-                        {isShort ? (
-                          <div className="space-y-0.5">
-                            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200">
-                              <AlertTriangle className="w-2.5 h-2.5" />
-                              Thiếu {item.shortageAmount} {item.unit}
-                            </span>
-                            <span className="block text-[9px] text-rose-500 font-medium">
-                              Cần nhập thêm
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle2 className="w-2.5 h-2.5" />
-                            Đủ kho
-                          </span>
-                        )}
-                      </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-bold text-slate-900 truncate">{item.name}</h4>
+                      <p className="text-[11px] text-slate-500 font-mono tabular-nums mt-0.5 truncate">
+                        Cần <strong className="text-slate-800">{requiredQty} {item.unit}</strong> • Kho{' '}
+                        <strong className={isShort ? 'text-rose-600' : 'text-slate-700'}>
+                          {currentStock} {item.unit}
+                        </strong>
+                      </p>
                     </div>
 
-                    {/* Formula subtext */}
-                    <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[9.5px] text-slate-400">
-                      <span>Định mức gốc: {item.baseRequired} {item.unit}</span>
-                      <span>Dự phòng an toàn (+{item.bufferMarginPercent}%): +{item.bufferExtra} {item.unit}</span>
+                    <div className="shrink-0">
+                      {isShort ? (
+                        <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 whitespace-nowrap">
+                          Thiếu {shortageQty} {item.unit}
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-semibold text-emerald-600 whitespace-nowrap">
+                          Đủ kho
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
@@ -425,22 +399,122 @@ export const KitchenForecastModal: React.FC<KitchenForecastModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-3.5 border-t border-slate-100 bg-[#F7FAFE] flex items-center justify-between text-xs text-slate-500">
-          <div className="flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-[#0057b8]" />
-            <span className="text-[11px]">Tự động cập nhật khi có học sinh đặt thêm</span>
-          </div>
-
+        <div className="p-3 border-t border-slate-100 bg-white">
           <button
             type="button"
             onClick={onClose}
-            className="py-2 px-4 rounded-xl bg-[#0057b8] hover:bg-[#003E82] text-white font-bold text-xs transition cursor-pointer shadow-xs"
+            className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer"
           >
             Đóng
           </button>
         </div>
       </div>
     </div>
+
+    {/* Centered Calendar Popup */}
+    {showDatePicker && (
+      <div
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setShowDatePicker(false);
+        }}
+        className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white w-full max-w-xs rounded-2xl border border-slate-100 p-4 shadow-2xl space-y-3 animate-in zoom-in-95 duration-150"
+        >
+          <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
+            <h4 className="text-xs font-bold text-slate-900">Chọn ngày dự báo</h4>
+            <button
+              type="button"
+              onClick={() => setShowDatePicker(false)}
+              className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer"
+              aria-label="Đóng lịch"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => shiftCalendarMonth(-1)}
+                className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200/80 hover:bg-slate-100 text-slate-600 flex items-center justify-center cursor-pointer"
+                aria-label="Tháng trước"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-xs font-bold text-slate-900 px-1.5">
+                Tháng {calendarMonth.month + 1}/{calendarMonth.year}
+              </span>
+              <button
+                type="button"
+                onClick={() => shiftCalendarMonth(1)}
+                className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200/80 hover:bg-slate-100 text-slate-600 flex items-center justify-center cursor-pointer"
+                aria-label="Tháng sau"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedDate(todayStr);
+                setShowDatePicker(false);
+              }}
+              className="text-[11px] font-bold text-[#0057b8] hover:underline cursor-pointer px-1.5 py-0.5"
+            >
+              Hôm nay
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-slate-400">
+            {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((d) => (
+              <span key={d} className="py-0.5">
+                {d}
+              </span>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {Array.from({ length: firstDayOffset }).map((_, i) => (
+              <span key={`empty-${i}`} />
+            ))}
+            {Array.from({ length: daysInMonth }, (_, idx) => {
+              const day = idx + 1;
+              const iso = toIsoDate(calendarMonth.year, calendarMonth.month, day);
+              const isSelected = iso === selectedDate;
+              const isToday = iso === todayStr;
+
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  onClick={() => {
+                    setSelectedDate(iso);
+                    setShowDatePicker(false);
+                  }}
+                  className={`h-8 rounded-lg text-[11px] font-mono font-bold transition cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#0057b8] text-white shadow-2xs'
+                      : isToday
+                      ? 'bg-blue-50 text-[#0057b8] border border-blue-200'
+                      : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/60'
+                  }`}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 
