@@ -1,16 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import {
-  CheckCircle2,
-  AlertCircle,
-  PlusCircle,
-  RefreshCw,
-  ChevronDown,
-  ChevronRight,
-  Layers,
-  Download,
-  Filter,
-} from 'lucide-react';
-import { Badge } from './Badge';
+  WarningCircleIcon as AlertCircle,
+  PlusCircleIcon as PlusCircle,
+  ArrowsClockwiseIcon as RefreshCw,
+  CaretDownIcon as ChevronDown,
+  CaretRightIcon as ChevronRight,
+  StackIcon as Layers,
+  DownloadSimpleIcon as Download,
+} from '@phosphor-icons/react';
 import { Button } from './Button';
 
 export interface ExcelValidationTableProps {
@@ -39,8 +36,8 @@ export const ExcelValidationTable: React.FC<ExcelValidationTableProps> = ({
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'INSERT' | 'UPDATE' | 'INVALID'>('ALL');
   const [expandedRowIds, setExpandedRowIds] = useState<Set<number>>(new Set());
 
-  const validRows = previewData?.validRows || [];
-  const errors = previewData?.errors || [];
+  const validRows = useMemo(() => previewData?.validRows || [], [previewData?.validRows]);
+  const errors = useMemo(() => previewData?.errors || [], [previewData?.errors]);
 
   const stats = useMemo(() => {
     let inserts = 0;
@@ -203,7 +200,6 @@ export const ExcelValidationTable: React.FC<ExcelValidationTableProps> = ({
                     <th className="px-3 py-2.5">Cơ sở</th>
                     <th className="px-3 py-2.5 text-center">Ca</th>
                     <th className="px-3 py-2.5">Ngày</th>
-                    <th className="px-3 py-2.5 text-right">Phụ thu</th>
                     <th className="px-3 py-2.5 text-center">BOM định mức</th>
                   </>
                 ) : (
@@ -272,9 +268,6 @@ export const ExcelValidationTable: React.FC<ExcelValidationTableProps> = ({
                           <td className="px-3 py-2.5 font-numeric text-muted">
                             {row.dateStr || (row.date ? new Date(row.date).toLocaleDateString('vi-VN') : '—')}
                           </td>
-                          <td className="px-3 py-2.5 text-right font-numeric font-medium text-foreground">
-                            {row.extraPrice > 0 ? formatVND(row.extraPrice) : '0đ'}
-                          </td>
                           <td className="px-3 py-2.5 text-center">
                             {hasRecipes ? (
                               <button
@@ -334,7 +327,7 @@ export const ExcelValidationTable: React.FC<ExcelValidationTableProps> = ({
                     {/* Expandable Recipe Row for Menu */}
                     {type === 'menu' && hasRecipes && isExpanded && (
                       <tr className="bg-surface-subtle">
-                        <td colSpan={8} className="px-6 py-3 border-t border-dashed border-border">
+                        <td colSpan={7} className="px-6 py-3 border-t border-dashed border-border">
                           <div className="space-y-1.5">
                             <div className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
                               <Layers className="size-3.5 text-primary" />

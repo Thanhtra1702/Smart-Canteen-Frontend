@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { CheckIcon as Check } from '@phosphor-icons/react';
 
 export interface StepItem {
   id: number;
@@ -54,7 +54,7 @@ export const ImportStepper: React.FC<ImportStepperProps> = ({
                     : 'bg-muted/20 text-muted'
                 }`}
               >
-                {isDone ? <Check className="size-4 stroke-[2.5]" /> : step.id}
+                {isDone ? <Check weight="bold" className="size-4" /> : step.id}
               </div>
               <div className="min-w-0">
                 <div className={`text-xs font-semibold truncate ${isCurrent ? 'text-primary' : 'text-foreground'}`}>

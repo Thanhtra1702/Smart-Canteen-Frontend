@@ -1,53 +1,33 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  RefreshCw,
-  Wallet,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Download,
-  PlusCircle,
-  Building2,
-  CheckCircle2,
-  Clock,
-  Search,
-  X,
-  CreditCard,
-  FileSpreadsheet,
-  Receipt,
-  User,
-  ArrowRightLeft,
-  ChevronLeft,
-  ChevronRight,
-  TrendingUp,
-} from 'lucide-react';
+  PlusCircleIcon as PlusCircle,
+  XIcon as X,
+  FileXlsIcon as FileSpreadsheet,
+  EyeIcon as Eye,
+  CaretLeftIcon as ChevronLeft,
+  CaretRightIcon as ChevronRight,
+  CaretUpDownIcon as ChevronsUpDown,
+} from '@phosphor-icons/react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 
 export const FinancePage: React.FC = () => {
-  const { user, selectedCanteenId } = useAuth();
+  const { selectedCanteenId } = useAuth();
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'reconciliations' | 'ledger'>('reconciliations');
   const [loading, setLoading] = useState(false);
   const [canteens, setCanteens] = useState<any[]>([]);
 
-  // Balance & KPI metrics
-  const [balanceData, setBalanceData] = useState<{
-    totalRevenue: number;
-    totalWithdrawn: number;
-    availableBalance: number;
-  }>({
+  const [balanceData, setBalanceData] = useState({
     totalRevenue: 0,
     totalWithdrawn: 0,
     availableBalance: 0,
   });
 
-  // Withdrawals / Reconciliations list
   const [withdrawals, setWithdrawals] = useState<any[]>([]);
-
-  // Transactions ledger list
   const [transactions, setTransactions] = useState<any[]>([]);
   const [ledgerPagination, setLedgerPagination] = useState({
     currentPage: 1,
@@ -55,6 +35,16 @@ export const FinancePage: React.FC = () => {
     totalItems: 0,
   });
   const [ledgerPage, setLedgerPage] = useState(1);
+
+  // Sorting state
+  const [reconSort, setReconSort] = useState<{ field: 'createdAt' | 'amount'; dir: 'asc' | 'desc' }>({
+    field: 'createdAt',
+    dir: 'desc',
+  });
+  const [ledgerSort, setLedgerSort] = useState<{ field: 'createdAt' | 'amount'; dir: 'asc' | 'desc' }>({
+    field: 'createdAt',
+    dir: 'desc',
+  });
 
   // Modals
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -64,12 +54,8 @@ export const FinancePage: React.FC = () => {
     description: '',
   });
   const [isSubmittingWithdraw, setIsSubmittingWithdraw] = useState(false);
-
-
-  // Detail Modal
   const [selectedWithdrawalDetail, setSelectedWithdrawalDetail] = useState<any | null>(null);
 
-  // Fetch canteens for dropdowns
   const fetchCanteens = useCallback(async () => {
     try {
       const res = await api.get('/canteens').catch(() => api.get('/admin-hq/canteens'));
@@ -80,7 +66,6 @@ export const FinancePage: React.FC = () => {
     }
   }, []);
 
-  // Fetch Balance & KPIs
   const fetchBalance = useCallback(async () => {
     try {
       const params: any = {};
@@ -100,7 +85,6 @@ export const FinancePage: React.FC = () => {
     }
   }, [selectedCanteenId]);
 
-  // Fetch Withdrawals (Reconciliations)
   const fetchWithdrawals = useCallback(async () => {
     try {
       const params: any = {};
@@ -120,7 +104,6 @@ export const FinancePage: React.FC = () => {
     }
   }, [selectedCanteenId]);
 
-  // Fetch Ledger Transactions
   const fetchLedger = useCallback(async () => {
     try {
       const params: any = {
@@ -142,7 +125,6 @@ export const FinancePage: React.FC = () => {
     }
   }, [selectedCanteenId, ledgerPage]);
 
-  // Combined fetch
   const refreshAll = useCallback(async () => {
     setLoading(true);
     await Promise.all([fetchBalance(), fetchWithdrawals(), fetchLedger()]);
@@ -154,12 +136,56 @@ export const FinancePage: React.FC = () => {
     refreshAll();
   }, [fetchCanteens, refreshAll]);
 
+  const formatVND = (num: number) =>
+    `${Math.round(num || 0).toLocaleString('vi-VN')} đ`;
 
-  const formatVND = (num: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
+  const formatDateTime = (dt: string) => {
+    const d = new Date(dt);
+    return {
+      time: d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      date: d.toLocaleDateString('vi-VN'),
+    };
   };
 
-  // Submit Withdrawal Request
+  const getTxMeta = (type: string) => {
+    switch (type) {
+      case 'TOPUP':
+      case 'TOPUP_BANK':
+        return { label: 'Nạp ví VietQR', dot: 'bg-emerald-500' };
+      case 'TOPUP_CASH':
+        return { label: 'Nạp tiền tại quầy', dot: 'bg-slate-400' };
+      case 'PAYMENT':
+      case 'ORDER_PAYMENT':
+        return { label: 'Thanh toán suất ăn', dot: 'bg-[#0057b8]' };
+      case 'PACKAGE_PURCHASE':
+        return { label: 'Đăng ký gói tháng', dot: 'bg-[#0057b8]' };
+      case 'REFUND':
+        return { label: 'Hoàn tiền vào ví', dot: 'bg-amber-500' };
+      default:
+        return { label: 'Giao dịch ví', dot: 'bg-slate-400' };
+    }
+  };
+
+  const sortedWithdrawals = useMemo(() => {
+    const factor = reconSort.dir === 'asc' ? 1 : -1;
+    return [...withdrawals].sort((a, b) => {
+      if (reconSort.field === 'amount') {
+        return (Number(a.amount || 0) - Number(b.amount || 0)) * factor;
+      }
+      return (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * factor;
+    });
+  }, [withdrawals, reconSort]);
+
+  const sortedTransactions = useMemo(() => {
+    const factor = ledgerSort.dir === 'asc' ? 1 : -1;
+    return [...transactions].sort((a, b) => {
+      if (ledgerSort.field === 'amount') {
+        return (Math.abs(Number(a.amount || 0)) - Math.abs(Number(b.amount || 0))) * factor;
+      }
+      return (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * factor;
+    });
+  }, [transactions, ledgerSort]);
+
   const handleSubmitWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
     const amountNum = Number(withdrawForm.amount);
@@ -184,7 +210,7 @@ export const FinancePage: React.FC = () => {
         description: withdrawForm.description.trim() || 'Đối soát doanh thu Canteen',
       });
 
-      toast.success(`Đã tạo lệnh đối soát & giải ngân ${formatVND(amountNum)} thành công!`);
+      toast.success(`Đã tạo lệnh đối soát ${formatVND(amountNum)} thành công!`);
       setShowWithdrawModal(false);
       setWithdrawForm({ canteenId: '', amount: '', description: '' });
       await refreshAll();
@@ -195,9 +221,6 @@ export const FinancePage: React.FC = () => {
     }
   };
 
-
-
-  // Export Excel Report
   const handleExportExcel = async () => {
     try {
       toast.info('Đang kết xuất báo cáo tài chính Excel...');
@@ -223,357 +246,374 @@ export const FinancePage: React.FC = () => {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      toast.success('Đã tải xuống file báo cáo tài chính Excel thành công!');
-    } catch (err) {
+      toast.success('Đã tải xuống file báo cáo tài chính Excel!');
+    } catch {
       toast.error('Lỗi khi xuất file báo cáo Excel');
     }
   };
 
-  // Helper for Transaction Type Badge
-  const renderTxBadge = (type: string) => {
-    switch (type) {
-      case 'TOPUP_BANK':
-        return <Badge variant="success" dot>Nạp VietQR</Badge>;
-      case 'TOPUP_CASH':
-        return <Badge variant="neutral" dot>Tiền mặt quầy (Cũ)</Badge>;
-      case 'ORDER_PAYMENT':
-        return <Badge variant="neutral">Suất ăn</Badge>;
-      case 'PACKAGE_PURCHASE':
-        return <Badge variant="brand">Mua Vé Tháng</Badge>;
-      case 'REFUND':
-        return <Badge variant="warning">Hoàn tiền</Badge>;
-      default:
-        return <Badge variant="neutral">{type}</Badge>;
-    }
-  };
-
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* 1. Quick Action Bar */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Badge variant="success" dot>Đối soát trực tiếp</Badge>
+    <div className="space-y-4 max-w-7xl mx-auto">
+      {/* 1. Compact 4-Column Divided KPI Strip */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-slate-100 overflow-hidden">
+        <div className="p-4">
+          <span className="text-xs text-slate-500 block">Tổng doanh thu</span>
+          <div className="mt-1.5 text-xl font-semibold text-slate-900 tabular-nums font-mono">
+            {formatVND(balanceData.totalRevenue)}
+          </div>
+        </div>
+
+        <div className="p-4">
+          <span className="text-xs text-slate-500 block">Khả dụng đối soát</span>
+          <div className="mt-1.5 text-xl font-semibold text-emerald-600 tabular-nums font-mono">
+            {formatVND(balanceData.availableBalance)}
+          </div>
+        </div>
+
+        <div className="p-4">
+          <span className="text-xs text-slate-500 block">Đã giải ngân</span>
+          <div className="mt-1.5 text-xl font-semibold text-slate-900 tabular-nums font-mono">
+            {formatVND(balanceData.totalWithdrawn)}
+          </div>
+        </div>
+
+        <div className="p-4">
+          <span className="text-xs text-slate-500 block">Giao dịch dòng tiền</span>
+          <div className="mt-1.5 text-xl font-semibold text-slate-900 tabular-nums font-mono">
+            {ledgerPagination.totalItems}
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Sub-tabs & Action Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setActiveTab('reconciliations')}
+            className={`h-8 px-3 rounded-lg text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'reconciliations'
+                ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                : 'text-slate-500 hover:text-slate-800 font-medium'
+            }`}
+          >
+            <span>Lịch sử đối soát</span>
+            <span className="text-[10px] text-slate-400 font-numeric">{withdrawals.length}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('ledger')}
+            className={`h-8 px-3 rounded-lg text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'ledger'
+                ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                : 'text-slate-500 hover:text-slate-800 font-medium'
+            }`}
+          >
+            <span>Sổ cái dòng tiền</span>
+            <span className="text-[10px] text-slate-400 font-numeric">{ledgerPagination.totalItems}</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Lập lệnh đối soát */}
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            icon={<FileSpreadsheet className="size-3.5 text-emerald-600" />}
+          >
+            Xuất Excel
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
             onClick={() => {
               setWithdrawForm({
-                canteenId: selectedCanteenId !== 'ALL' ? selectedCanteenId : (canteens[0]?.id || ''),
+                canteenId: selectedCanteenId !== 'ALL' ? selectedCanteenId : canteens[0]?.id || '',
                 amount: balanceData.availableBalance > 0 ? String(balanceData.availableBalance) : '',
-                description: `Đối soát doanh thu ${new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`,
+                description: `Đối soát doanh thu ${new Date().toLocaleDateString('vi-VN', {
+                  timeZone: 'Asia/Ho_Chi_Minh',
+                })}`,
               });
               setShowWithdrawModal(true);
             }}
-            className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            icon={<PlusCircle className="size-3.5" />}
           >
-            <PlusCircle className="size-3.5" />
-            <span>Yêu cầu đối soát</span>
-          </button>
-
-          {/* Xuất Excel */}
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="px-3 py-1.5 rounded-lg border border-border bg-surface hover:bg-slate-50 text-foreground text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-            title="Xuất file đối soát Excel"
-          >
-            <FileSpreadsheet className="size-3.5 text-emerald-600" />
-            <span className="hidden sm:inline">Xuất Excel</span>
-          </button>
+            Yêu cầu đối soát
+          </Button>
         </div>
       </div>
 
-      {/* 2. KPI Cards Grid (evondevKit Clean Divided Grid) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-border bg-border shadow-xs">
-        {/* Metric 1: Tổng doanh thu */}
-        <div className="min-w-0 bg-surface p-5 space-y-2">
-          <div className="flex items-center justify-between text-muted">
-            <span className="text-xs font-medium">Tổng doanh thu thực tế</span>
-            <TrendingUp className="size-4 text-brand" />
-          </div>
-          <div className="text-2xl font-semibold text-foreground tracking-tight tabular-nums font-mono">
-            {formatVND(balanceData.totalRevenue)}
-          </div>
-          <p className="text-[11px] text-muted">Doanh thu từ đơn đặt & điểm danh quầy</p>
-        </div>
-
-        {/* Metric 2: Số dư khả dụng chờ đối soát */}
-        <div className="min-w-0 bg-surface p-5 space-y-2">
-          <div className="flex items-center justify-between text-muted">
-            <span className="text-xs font-medium text-emerald-800">Số dư khả dụng đối soát</span>
-            <Wallet className="size-4 text-emerald-600" />
-          </div>
-          <div className="text-2xl font-semibold text-emerald-600 tracking-tight tabular-nums font-mono">
-            {formatVND(balanceData.availableBalance)}
-          </div>
-          <p className="text-[11px] text-emerald-700/80 font-medium">Sẵn sàng lập lệnh giải ngân</p>
-        </div>
-
-        {/* Metric 3: Tổng tiền đã quyết toán */}
-        <div className="min-w-0 bg-surface p-5 space-y-2">
-          <div className="flex items-center justify-between text-muted">
-            <span className="text-xs font-medium">Đã giải ngân đối soát</span>
-            <ArrowUpRight className="size-4 text-slate-500" />
-          </div>
-          <div className="text-2xl font-semibold text-foreground tracking-tight tabular-nums font-mono">
-            {formatVND(balanceData.totalWithdrawn)}
-          </div>
-          <p className="text-[11px] text-muted">Qua {withdrawals.length} phiên đối soát thành công</p>
-        </div>
-
-        {/* Metric 4: Lưu lượng dòng tiền */}
-        <div className="min-w-0 bg-surface p-5 space-y-2">
-          <div className="flex items-center justify-between text-muted">
-            <span className="text-xs font-medium">Giao dịch dòng tiền</span>
-            <ArrowRightLeft className="size-4 text-slate-500" />
-          </div>
-          <div className="text-2xl font-semibold text-foreground tracking-tight tabular-nums font-mono">
-            {ledgerPagination.totalItems}{' '}
-            <span className="text-xs font-normal text-muted font-sans">bản ghi</span>
-          </div>
-          <p className="text-[11px] text-muted">Gồm nạp ví, suất ăn & vé tháng</p>
-        </div>
-      </div>
-
-      {/* 3. Sub-tabs Navigation */}
-      <div className="flex items-center gap-1 border-b border-border pb-px">
-        <button
-          type="button"
-          onClick={() => setActiveTab('reconciliations')}
-          className={`px-4 py-2.5 text-xs font-semibold transition-colors border-b-2 cursor-pointer flex items-center gap-2 ${
-            activeTab === 'reconciliations'
-              ? 'border-brand text-brand'
-              : 'border-transparent text-muted hover:text-foreground'
-          }`}
-        >
-          <Receipt className="size-4" />
-          <span>Lịch sử đối soát & Quyết toán ({withdrawals.length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('ledger')}
-          className={`px-4 py-2.5 text-xs font-semibold transition-colors border-b-2 cursor-pointer flex items-center gap-2 ${
-            activeTab === 'ledger'
-              ? 'border-brand text-brand'
-              : 'border-transparent text-muted hover:text-foreground'
-          }`}
-        >
-          <ArrowRightLeft className="size-4" />
-          <span>Sổ cái giao dịch dòng tiền ({ledgerPagination.totalItems})</span>
-        </button>
-      </div>
-
-      {/* 4. Tab 1: Lịch sử đối soát (Reconciliations Table) */}
+      {/* 3. Tab 1: Lịch sử đối soát (Floating Row Cards matching AuditLogsPage) */}
       {activeTab === 'reconciliations' && (
-        <div className="bg-surface rounded-2xl border border-border overflow-hidden shadow-xs">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <span className="text-xs font-semibold text-foreground">
-              Danh sách các đợt đối soát & giải ngân điểm bán
-            </span>
-            <span className="text-xs text-muted">
-              Đơn vị tiền tệ: VNĐ
-            </span>
-          </div>
+        <div className="space-y-3">
+          <div className="overflow-x-auto pb-1">
+            <div className="min-w-[680px] space-y-2">
+              <div className="grid grid-cols-[minmax(210px,1.3fr)_minmax(200px,1.4fr)_minmax(150px,1fr)_90px] items-center gap-3 px-4 py-1 text-xs font-medium text-slate-400">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setReconSort((prev) => ({
+                      field: 'createdAt',
+                      dir: prev.field === 'createdAt' && prev.dir === 'desc' ? 'asc' : 'desc',
+                    }))
+                  }
+                  className="inline-flex items-center gap-1 hover:text-slate-700 transition-colors cursor-pointer text-left"
+                >
+                  <span>Cơ sở / Thời gian</span>
+                  <ChevronsUpDown className="size-3 text-slate-300" />
+                </button>
+                <span>Nội dung đối soát</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setReconSort((prev) => ({
+                      field: 'amount',
+                      dir: prev.field === 'amount' && prev.dir === 'desc' ? 'asc' : 'desc',
+                    }))
+                  }
+                  className="inline-flex items-center gap-1 hover:text-slate-700 transition-colors cursor-pointer text-left"
+                >
+                  <span>Số tiền &amp; Trạng thái</span>
+                  <ChevronsUpDown className="size-3 text-slate-300" />
+                </button>
+                <span className="text-right">Chi tiết</span>
+              </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-surface-hover text-muted uppercase text-[11px] font-medium border-b border-border">
-                <tr>
-                  <th className="px-5 py-3.5">Mã đối soát</th>
-                  <th className="px-5 py-3.5">Thời gian lập</th>
-                  <th className="px-5 py-3.5">Cơ sở Canteen</th>
-                  <th className="px-5 py-3.5 text-right">Số tiền giải ngân</th>
-                  <th className="px-5 py-3.5">Nội dung đối soát</th>
-                  <th className="px-5 py-3.5 text-center">Trạng thái</th>
-                  <th className="px-5 py-3.5 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {withdrawals.map((w, idx) => (
-                  <tr key={w.id || idx} className="hover:bg-surface-hover transition-colors">
-                    <td className="px-5 py-3.5 font-mono text-[11px] font-semibold text-foreground">
-                      #WS-{w.id.substring(0, 8).toUpperCase()}
-                    </td>
-                    <td className="px-5 py-3.5 text-muted font-mono text-[11px]">
-                      {new Date(w.createdAt).toLocaleString('vi-VN')}
-                    </td>
-                    <td className="px-5 py-3.5 font-medium text-foreground">
-                      <div className="flex items-center gap-1.5">
-                        <Building2 className="size-3.5 text-muted shrink-0" />
-                        <span>{w.canteen?.name || 'Canteen cơ sở'}</span>
+              {sortedWithdrawals.map((w, idx) => {
+                const { time, date } = formatDateTime(w.createdAt);
+                const isPending = w.status === 'PENDING';
+                const canteenName = w.canteen?.name || 'Canteen cơ sở';
+
+                return (
+                  <div
+                    key={w.id || idx}
+                    className="group bg-white rounded-xl border border-slate-200/75 hover:border-[#0057b8] hover:shadow-xs px-4 py-3 grid grid-cols-[minmax(210px,1.3fr)_minmax(200px,1.4fr)_minmax(150px,1fr)_90px] items-center gap-3 transition-all"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-slate-800 truncate" title={canteenName}>
+                        {canteenName}
                       </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-semibold text-emerald-600 font-mono tabular-nums text-sm">
-                      {formatVND(Number(w.amount))}
-                    </td>
-                    <td className="px-5 py-3.5 text-muted max-w-xs truncate">
-                      {w.description || 'Đối soát doanh thu bán trú'}
-                    </td>
-                    <td className="px-5 py-3.5 text-center">
-                      <Badge variant="success" dot>
-                        Đã quyết toán
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
+                      <div className="text-[11px] font-mono tabular-nums mt-0.5 flex items-center gap-1.5">
+                        <span className="text-slate-600">{time}</span>
+                        <span className="text-slate-400">{date}</span>
+                      </div>
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="text-xs text-slate-700 truncate" title={w.description || ''}>
+                        {w.description || 'Đối soát doanh thu bán trú'}
+                      </div>
+                      <div className="text-[11px] text-slate-400 font-mono truncate mt-0.5">
+                        {w.code || `#WS-${String(w.id || '').substring(0, 8).toUpperCase()}`}
+                      </div>
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium font-mono tabular-nums text-slate-900">
+                        {formatVND(Number(w.amount))}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+                        <span
+                          className={`size-1.5 rounded-full shrink-0 ${
+                            isPending ? 'bg-amber-500' : 'bg-emerald-500'
+                          }`}
+                        />
+                        <span>{isPending ? 'Chờ xử lý' : 'Đã quyết toán'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
                       <button
                         type="button"
                         onClick={() => setSelectedWithdrawalDetail(w)}
-                        className="px-2.5 py-1 rounded-lg border border-border hover:bg-secondary text-foreground text-[11px] font-medium transition cursor-pointer"
+                        className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-slate-600 group-hover:bg-[#0057b8] group-hover:text-white group-hover:border-[#0057b8] text-xs font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
                       >
-                        Chi tiết
+                        <Eye className="size-3.5" />
+                        <span>Xem</span>
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+                );
+              })}
 
-          {withdrawals.length === 0 && (
-            <div className="py-14 text-center text-xs text-muted">
-              {loading ? 'Đang tải dữ liệu đối soát...' : 'Chưa có đợt đối soát giải ngân nào được tạo.'}
+              {sortedWithdrawals.length === 0 && (
+                <div className="bg-white rounded-xl border border-slate-200/75 py-12 text-center text-xs text-slate-400">
+                  {loading ? 'Đang tải dữ liệu đối soát...' : 'Chưa có đợt đối soát nào.'}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
 
-      {/* 5. Tab 2: Sổ cái dòng tiền (Transactions Ledger Table) */}
+      {/* 4. Tab 2: Sổ cái dòng tiền (Floating Row Cards matching AuditLogsPage) */}
       {activeTab === 'ledger' && (
-        <div className="bg-surface rounded-2xl border border-border overflow-hidden shadow-xs space-y-0">
-          <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-foreground">
-              Nhật ký giao dịch dòng tiền toàn hệ thống
-            </span>
-            <span className="text-xs text-muted">
-              Trang {ledgerPagination.currentPage} / {Math.max(1, ledgerPagination.totalPages)} • Tổng {ledgerPagination.totalItems} giao dịch
-            </span>
-          </div>
+        <div className="space-y-3">
+          <div className="overflow-x-auto pb-1">
+            <div className="min-w-[680px] space-y-2">
+              <div className="grid grid-cols-[minmax(190px,1.2fr)_minmax(160px,1fr)_minmax(190px,1.3fr)_150px] items-center gap-3 px-4 py-1 text-xs font-medium text-slate-400">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLedgerSort((prev) => ({
+                      field: 'createdAt',
+                      dir: prev.field === 'createdAt' && prev.dir === 'desc' ? 'asc' : 'desc',
+                    }))
+                  }
+                  className="inline-flex items-center gap-1 hover:text-slate-700 transition-colors cursor-pointer text-left"
+                >
+                  <span>Người dùng</span>
+                  <ChevronsUpDown className="size-3 text-slate-300" />
+                </button>
+                <span>Loại giao dịch</span>
+                <span>Ghi chú</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setLedgerSort((prev) => ({
+                      field: 'amount',
+                      dir: prev.field === 'amount' && prev.dir === 'desc' ? 'asc' : 'desc',
+                    }))
+                  }
+                  className="inline-flex items-center gap-1 hover:text-slate-700 transition-colors cursor-pointer justify-end"
+                >
+                  <span>Số tiền</span>
+                  <ChevronsUpDown className="size-3 text-slate-300" />
+                </button>
+              </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-surface-hover text-muted uppercase text-[11px] font-medium border-b border-border">
-                <tr>
-                  <th className="px-5 py-3.5">Mã GD</th>
-                  <th className="px-5 py-3.5">Thời gian</th>
-                  <th className="px-5 py-3.5">Người dùng / Học sinh</th>
-                  <th className="px-5 py-3.5">Loại giao dịch</th>
-                  <th className="px-5 py-3.5 text-right">Biến động</th>
-                  <th className="px-5 py-3.5 text-right">Số dư sau GD</th>
-                  <th className="px-5 py-3.5">Ghi chú</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {transactions.map((tx) => {
-                  const isPositive =
-                    tx.type === 'TOPUP_BANK' || tx.type === 'TOPUP_CASH' || tx.type === 'REFUND';
-                  const userObj = tx.wallet?.user;
+              {sortedTransactions.map((tx) => {
+                const rawAmount = Number(tx.amount || 0);
+                const absAmount = Math.abs(rawAmount);
+                const isCredit =
+                  rawAmount > 0 &&
+                  tx.type !== 'ORDER_PAYMENT' &&
+                  tx.type !== 'PAYMENT' &&
+                  tx.type !== 'PACKAGE_PURCHASE';
+                const userObj = tx.wallet?.user || tx.user;
+                const { time, date } = formatDateTime(tx.createdAt);
+                const txMeta = getTxMeta(tx.type);
 
-                  return (
-                    <tr key={tx.id} className="hover:bg-surface-hover transition-colors">
-                      <td className="px-5 py-3.5 font-mono text-[11px] font-medium text-muted">
-                        #{tx.id.substring(0, 8).toUpperCase()}
-                      </td>
-                      <td className="px-5 py-3.5 text-muted font-mono text-[11px]">
-                        {new Date(tx.createdAt).toLocaleString('vi-VN')}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <div className="font-semibold text-foreground">
-                          {userObj?.fullName || 'Học sinh'}
-                        </div>
-                        <div className="text-[10.5px] text-muted">
-                          {userObj?.phone || userObj?.email || 'N/A'}
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        {renderTxBadge(tx.type)}
-                      </td>
-                      <td
-                        className={`px-5 py-3.5 text-right font-mono font-semibold tabular-nums ${
-                          isPositive ? 'text-emerald-600' : 'text-foreground'
+                return (
+                  <div
+                    key={tx.id}
+                    className="group bg-white rounded-xl border border-slate-200/75 hover:border-[#0057b8] hover:shadow-xs px-4 py-3 grid grid-cols-[minmax(190px,1.2fr)_minmax(160px,1fr)_minmax(190px,1.3fr)_150px] items-center gap-3 transition-all"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-slate-800 truncate">
+                        {userObj?.fullName || 'Học sinh'}
+                      </div>
+                      <div className="text-[11px] font-mono tabular-nums mt-0.5 flex items-center gap-1.5">
+                        <span className="text-slate-600">{time}</span>
+                        <span className="text-slate-400">{date}</span>
+                      </div>
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`size-1.5 rounded-full shrink-0 ${txMeta.dot}`} />
+                        <span className="text-xs text-slate-800 truncate">{txMeta.label}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 truncate mt-0.5 pl-3.5">
+                        {userObj?.phone || userObj?.email || 'Ví điện tử'}
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-slate-600 truncate" title={tx.description || ''}>
+                      {tx.description ||
+                        (tx.orderId ? `Đơn hàng #${String(tx.orderId).substring(0, 8)}` : 'Giao dịch ví')}
+                    </div>
+
+                    <div className="text-right min-w-0">
+                      <div
+                        className={`text-xs font-medium font-mono tabular-nums ${
+                          isCredit ? 'text-emerald-600' : 'text-slate-800'
                         }`}
                       >
-                        {isPositive ? `+${formatVND(Number(tx.amount))}` : `-${formatVND(Number(tx.amount))}`}
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-mono text-muted tabular-nums">
-                        {tx.balanceAfter !== undefined ? formatVND(Number(tx.balanceAfter)) : '—'}
-                      </td>
-                      <td className="px-5 py-3.5 text-muted max-w-xs truncate">
-                        {tx.description || tx.orderId ? `Đơn hàng #${tx.orderId?.substring(0, 8)}` : 'Giao dịch ví'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        {isCredit ? `+${formatVND(absAmount)}` : `-${formatVND(absAmount)}`}
+                      </div>
+                      {tx.balanceAfter !== undefined && (
+                        <div className="text-[11px] text-slate-400 font-mono tabular-nums mt-0.5">
+                          Còn {formatVND(Number(tx.balanceAfter))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {sortedTransactions.length === 0 && (
+                <div className="bg-white rounded-xl border border-slate-200/75 py-12 text-center text-xs text-slate-400">
+                  {loading ? 'Đang tải sổ cái...' : 'Không có giao dịch nào.'}
+                </div>
+              )}
+            </div>
           </div>
 
-          {transactions.length === 0 && (
-            <div className="py-14 text-center text-xs text-muted">
-              {loading ? 'Đang nạp sổ cái giao dịch...' : 'Không có giao dịch nào trong khoảng thời gian này.'}
-            </div>
-          )}
-
-          {/* Pagination Controls */}
           {ledgerPagination.totalPages > 1 && (
-            <div className="p-4 border-t border-border flex items-center justify-between text-xs">
-              <button
-                type="button"
-                disabled={ledgerPage <= 1}
-                onClick={() => setLedgerPage(ledgerPage - 1)}
-                className="px-3 py-1.5 rounded-lg border border-border disabled:opacity-40 hover:bg-secondary transition flex items-center gap-1 cursor-pointer"
-              >
-                <ChevronLeft className="size-4" />
-                <span>Trang trước</span>
-              </button>
-              <span className="text-muted font-medium">
-                Trang {ledgerPage} / {ledgerPagination.totalPages}
+            <div className="pt-0.5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+              <span>
+                {sortedTransactions.length} / {ledgerPagination.totalItems} giao dịch
               </span>
-              <button
-                type="button"
-                disabled={ledgerPage >= ledgerPagination.totalPages}
-                onClick={() => setLedgerPage(ledgerPage + 1)}
-                className="px-3 py-1.5 rounded-lg border border-border disabled:opacity-40 hover:bg-secondary transition flex items-center gap-1 cursor-pointer"
-              >
-                <span>Trang sau</span>
-                <ChevronRight className="size-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={ledgerPage <= 1 || loading}
+                  onClick={() => setLedgerPage(ledgerPage - 1)}
+                  icon={<ChevronLeft className="size-3.5" />}
+                >
+                  Trước
+                </Button>
+                <span className="text-xs font-numeric font-medium px-2 text-slate-700">
+                  {ledgerPage} / {ledgerPagination.totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={ledgerPage >= ledgerPagination.totalPages || loading}
+                  onClick={() => setLedgerPage(ledgerPage + 1)}
+                  icon={<ChevronRight className="size-3.5" />}
+                >
+                  Sau
+                </Button>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* MODAL 1: LẬP LỆNH ĐỐI SOÁT & GIẢI NGÂN */}
+      {/* MODAL 1: LẬP LỆNH ĐỐI SOÁT */}
       {showWithdrawModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-surface rounded-2xl border border-border shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-2 border-b border-border">
-              <div className="flex items-center gap-2">
-                <Receipt className="size-5 text-brand" />
-                <h3 className="text-base font-semibold text-foreground">
-                  Lập Lệnh Đối Soát & Giải Ngân
-                </h3>
-              </div>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowWithdrawModal(false);
+          }}
+          className="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200/80 shadow-modal p-5 space-y-4 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-semibold text-slate-900">Yêu cầu đối soát &amp; giải ngân</h3>
               <button
                 type="button"
                 onClick={() => setShowWithdrawModal(false)}
-                className="text-muted hover:text-foreground cursor-pointer"
+                className="size-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer"
+                aria-label="Đóng"
               >
-                <X className="size-5" />
+                <X className="size-3.5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmitWithdraw} className="space-y-4 text-xs">
-              {/* Select Canteen */}
+            <form onSubmit={handleSubmitWithdraw} className="space-y-3.5">
               <div className="space-y-1">
-                <label className="font-semibold text-foreground">Cơ sở Canteen quyết toán:</label>
+                <label className="font-medium text-slate-700 block">Cơ sở Canteen</label>
                 <select
                   value={withdrawForm.canteenId}
                   onChange={(e) => setWithdrawForm({ ...withdrawForm, canteenId: e.target.value })}
-                  className="w-full px-3 py-2 bg-surface border border-border-strong rounded-xl text-foreground text-xs focus:border-focus outline-hidden"
+                  className="w-full h-9 px-3 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs focus:border-[#0057b8] outline-hidden"
                 >
                   {canteens.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -583,151 +623,136 @@ export const FinancePage: React.FC = () => {
                 </select>
               </div>
 
-              {/* Available Balance Box */}
-              <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-emerald-900 flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] text-emerald-700">Số dư khả dụng hiện tại:</p>
-                  <p className="text-base font-bold font-mono text-emerald-800">
-                    {formatVND(balanceData.availableBalance)}
-                  </p>
-                </div>
-                <Badge variant="success">Sẵn sàng</Badge>
+              <div className="px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200/70 flex items-center justify-between">
+                <span className="text-slate-500">Số dư khả dụng</span>
+                <span className="text-sm font-semibold font-mono text-emerald-600 tabular-nums">
+                  {formatVND(balanceData.availableBalance)}
+                </span>
               </div>
 
-              {/* Amount Input */}
-              <div className="space-y-1">
-                <label className="font-semibold text-foreground">Số tiền đối soát (VNĐ):</label>
+              <div className="space-y-1.5">
+                <label className="font-medium text-slate-700 block">Số tiền đối soát (đ)</label>
                 <input
                   type="number"
                   placeholder="Nhập số tiền..."
                   value={withdrawForm.amount}
                   onChange={(e) => setWithdrawForm({ ...withdrawForm, amount: e.target.value })}
-                  className="w-full px-3 py-2 bg-surface border border-border-strong rounded-xl text-foreground text-sm font-semibold focus:border-focus outline-hidden"
+                  className="w-full h-9.5 px-3 bg-white border border-slate-200 rounded-xl text-slate-900 text-sm font-mono font-semibold focus:border-[#0057b8] outline-hidden"
                   required
                 />
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: 'Toàn bộ số dư', val: balanceData.availableBalance },
+                    { label: '50% số dư', val: Math.floor(balanceData.availableBalance * 0.5) },
+                    { label: '10.000.000 đ', val: 10000000 },
+                    { label: '20.000.000 đ', val: 20000000 },
+                  ].map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setWithdrawForm({ ...withdrawForm, amount: String(preset.val) })}
+                      className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-[11px] font-medium transition cursor-pointer"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Quick Presets */}
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { label: 'Toàn bộ số dư', val: balanceData.availableBalance },
-                  { label: '50% số dư', val: Math.floor(balanceData.availableBalance * 0.5) },
-                  { label: '10.000.000đ', val: 10000000 },
-                  { label: '20.000.000đ', val: 20000000 },
-                ].map((preset, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setWithdrawForm({ ...withdrawForm, amount: String(preset.val) })}
-                    className="px-2.5 py-1 rounded-lg border border-border hover:bg-secondary text-foreground text-[11px] font-medium transition cursor-pointer"
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Description Input */}
               <div className="space-y-1">
-                <label className="font-semibold text-foreground">Nội dung đối soát / Kỳ quyết toán:</label>
+                <label className="font-medium text-slate-700 block">Nội dung đối soát</label>
                 <textarea
                   rows={2}
-                  placeholder="Ví dụ: Đối soát doanh thu tuần 42 Canteen CS1"
+                  placeholder="Ví dụ: Đối soát doanh thu tuần 1 tháng 11"
                   value={withdrawForm.description}
                   onChange={(e) => setWithdrawForm({ ...withdrawForm, description: e.target.value })}
-                  className="w-full p-2.5 bg-surface border border-border-strong rounded-xl text-foreground text-xs focus:border-focus outline-hidden"
+                  className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-slate-800 text-xs focus:border-[#0057b8] outline-hidden resize-none"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setShowWithdrawModal(false)}
-                  className="px-4 py-2 rounded-xl border border-border hover:bg-secondary text-foreground font-semibold cursor-pointer"
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingWithdraw}
-                  className="px-4 py-2 rounded-xl bg-brand hover:bg-brand-hover text-white font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
-                >
-                  {isSubmittingWithdraw ? 'Đang xử lý...' : 'Xác nhận đối soát'}
-                </button>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowWithdrawModal(false)}>
+                  Hủy
+                </Button>
+                <Button type="submit" variant="primary" size="sm" isLoading={isSubmittingWithdraw}>
+                  Xác nhận đối soát
+                </Button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-
-      {/* MODAL 3: CHI TIẾT PHIẾU ĐỐI SOÁT */}
+      {/* MODAL 2: CHI TIẾT PHIẾU ĐỐI SOÁT */}
       {selectedWithdrawalDetail && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-surface rounded-2xl border border-border shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-2 border-b border-border">
-              <div className="flex items-center gap-2">
-                <Receipt className="size-5 text-brand" />
-                <h3 className="text-base font-semibold text-foreground">
-                  Chứng Từ Đối Soát & Quyết Toán
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedWithdrawalDetail(null)}
-                className="text-muted hover:text-foreground cursor-pointer"
-              >
-                <X className="size-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="p-4 rounded-xl bg-surface-hover border border-border space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted">Mã chứng từ:</span>
-                  <span className="font-mono font-bold text-foreground">
-                    #WS-{selectedWithdrawalDetail.id?.substring(0, 8).toUpperCase()}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted">Thời gian xác thực:</span>
-                  <span className="font-mono text-foreground">
-                    {new Date(selectedWithdrawalDetail.createdAt).toLocaleString('vi-VN')}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted">Cơ sở thụ hưởng:</span>
-                  <span className="font-semibold text-foreground">
-                    {selectedWithdrawalDetail.canteen?.name || 'Canteen trường'}
-                  </span>
-                </div>
-                <div className="flex justify-between pt-2 border-t border-border">
-                  <span className="text-muted">Số tiền quyết toán:</span>
-                  <span className="text-base font-bold font-mono text-emerald-600">
-                    {formatVND(Number(selectedWithdrawalDetail.amount))}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted">Trạng thái hạch toán:</span>
-                  <Badge variant="success" dot>Đã thanh toán ngân hàng</Badge>
-                </div>
-              </div>
-
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedWithdrawalDetail(null);
+          }}
+          className="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200/80 shadow-modal p-5 space-y-4 text-xs">
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
               <div>
-                <span className="text-muted">Nội dung ghi chú:</span>
-                <p className="text-foreground font-medium mt-0.5 p-2.5 rounded-xl bg-surface-hover border border-border">
-                  {selectedWithdrawalDetail.description || 'Đối soát doanh thu bán trú'}
+                <h3 className="text-sm font-semibold text-slate-900">Chi tiết phiếu đối soát</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {selectedWithdrawalDetail.canteen?.name || 'Canteen cơ sở'} •{' '}
+                  {new Date(selectedWithdrawalDetail.createdAt).toLocaleString('vi-VN')}
                 </p>
               </div>
-            </div>
-
-            <div className="flex justify-end pt-2 border-t border-border">
               <button
                 type="button"
                 onClick={() => setSelectedWithdrawalDetail(null)}
-                className="px-4 py-2 rounded-xl bg-brand text-white font-semibold text-xs cursor-pointer hover:bg-brand-hover shadow-xs"
+                className="size-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer shrink-0"
+                aria-label="Đóng"
               >
-                Đóng chứng từ
+                <X className="size-3.5" />
               </button>
+            </div>
+
+            <div className="rounded-xl border border-slate-200/80 divide-y divide-slate-100 bg-slate-50/40">
+              <div className="px-3.5 py-2.5 flex items-center justify-between gap-4">
+                <span className="text-slate-500">Mã phiếu</span>
+                <span className="font-mono font-medium text-slate-800">
+                  {selectedWithdrawalDetail.code ||
+                    `#WS-${String(selectedWithdrawalDetail.id || '').substring(0, 8).toUpperCase()}`}
+                </span>
+              </div>
+              <div className="px-3.5 py-2.5 flex items-center justify-between gap-4">
+                <span className="text-slate-500">Cơ sở thụ hưởng</span>
+                <span className="font-medium text-slate-800 text-right">
+                  {selectedWithdrawalDetail.canteen?.name || 'Canteen trường'}
+                </span>
+              </div>
+              <div className="px-3.5 py-2.5 flex items-center justify-between gap-4">
+                <span className="text-slate-500">Số tiền quyết toán</span>
+                <span className="text-sm font-semibold font-mono text-emerald-600 tabular-nums">
+                  {formatVND(Number(selectedWithdrawalDetail.amount))}
+                </span>
+              </div>
+              <div className="px-3.5 py-2.5 flex items-center justify-between gap-4">
+                <span className="text-slate-500">Trạng thái</span>
+                <span className="inline-flex items-center gap-1.5 font-medium text-slate-800">
+                  <span
+                    className={`size-1.5 rounded-full ${
+                      selectedWithdrawalDetail.status === 'PENDING' ? 'bg-amber-500' : 'bg-emerald-500'
+                    }`}
+                  />
+                  {selectedWithdrawalDetail.status === 'PENDING' ? 'Chờ xử lý' : 'Đã thanh toán'}
+                </span>
+              </div>
+              <div className="px-3.5 py-2.5 flex items-start justify-between gap-4">
+                <span className="text-slate-500 shrink-0">Nội dung</span>
+                <span className="text-slate-800 text-right">
+                  {selectedWithdrawalDetail.description || 'Đối soát doanh thu bán trú'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-100">
+              <Button variant="outline" size="sm" onClick={() => setSelectedWithdrawalDetail(null)}>
+                Đóng
+              </Button>
             </div>
           </div>
         </div>

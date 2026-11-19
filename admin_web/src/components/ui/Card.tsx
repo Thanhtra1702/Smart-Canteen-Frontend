@@ -25,7 +25,7 @@ export const Card: React.FC<CardProps> = ({
   return (
     <section
       {...props}
-      className={`flex flex-col rounded-xl border border-border bg-surface shadow-xs transition-shadow duration-150 ${
+      className={`flex flex-col rounded-2xl border border-slate-200/80 bg-white shadow-2xs transition-shadow duration-150 ${
         isFlush ? 'p-0 overflow-hidden' : 'p-5 sm:p-6'
       } ${className}`}
     >

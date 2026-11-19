@@ -1,30 +1,31 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '../services/api';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
-  Cell,
 } from 'recharts';
 import {
-  ArrowRight,
-  CheckCircle2,
-  Clock,
-  Calendar,
-  Building2,
-  AlertTriangle,
-  RefreshCw,
-  TrendingUp,
-  Utensils,
-  Wallet,
-  PackageCheck,
-} from 'lucide-react';
-import { Badge } from '../components/ui/Badge';
-import { Tabs } from '../components/ui/Tabs';
+  ArrowRightIcon as ArrowRight,
+  CaretRightIcon as CaretRight,
+  CheckCircleIcon as CheckCircle2,
+  WarningIcon as AlertTriangle,
+  ArrowsClockwiseIcon as RefreshCw,
+  WalletIcon as Wallet,
+  ForkKnifeIcon as Utensils,
+  ClockIcon as Clock,
+  CalendarIcon as Calendar,
+  ChartLineUpIcon as ChartLineUp,
+  FireIcon as Fire,
+  CrownIcon as Crown,
+  BuildingsIcon as Building2,
+  InfoIcon as Info,
+  TrendUpIcon as TrendUp,
+} from '@phosphor-icons/react';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
 
@@ -57,7 +58,7 @@ export const DashboardPage: React.FC<DashboardProps> = ({ onNavigateTab }) => {
       const message =
         err?.response?.data?.message ||
         err?.message ||
-        'Không thể tải dữ liệu bảng điều khiển. Vui lòng kiểm tra kết nối mạng hoặc thử lại.';
+        'Không thể tải dữ liệu bảng điều khiển.';
       setError(message);
     } finally {
       setLoading(false);
@@ -68,30 +69,72 @@ export const DashboardPage: React.FC<DashboardProps> = ({ onNavigateTab }) => {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  const formatVND = (num: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
+  const formatVND = (num: number) => `${Math.round(num || 0).toLocaleString('vi-VN')} đ`;
+
+  const formatAxisVND = (val: number) => {
+    if (val === 0) return '0';
+    if (val >= 1000000) {
+      const m = val / 1000000;
+      return `${Number.isInteger(m) ? m : m.toFixed(1)} tr`;
+    }
+    return `${Math.round(val / 1000)}k`;
   };
+
+  const getCategoryMeta = (category: string) => {
+    switch (category) {
+      case 'MAIN':
+        return { label: 'Món chính', dot: 'bg-[#0057b8]' };
+      case 'SIDE':
+        return { label: 'Món phụ', dot: 'bg-emerald-500' };
+      case 'SOUP':
+        return { label: 'Món canh', dot: 'bg-amber-500' };
+      case 'DRINK':
+        return { label: 'Đồ uống', dot: 'bg-cyan-500' };
+      case 'DESSERT':
+        return { label: 'Tráng miệng', dot: 'bg-purple-500' };
+      default:
+        return { label: category || 'Món ăn', dot: 'bg-slate-400' };
+    }
+  };
+
+  const normalizedWeekdayTraffic = useMemo(() => {
+    const raw = data?.weekdayTraffic || [];
+    return raw.map((item: any) => ({
+      ...item,
+      label: item.shortDay || item.day,
+      meals: Number(item.meals ?? item.count ?? 0),
+    }));
+  }, [data?.weekdayTraffic]);
+
+  const sevenDayTotals = useMemo(() => {
+    const list = data?.sevenDayTrend || [];
+    return list.reduce(
+      (acc: { revenue: number; meals: number }, d: any) => ({
+        revenue: acc.revenue + Number(d.revenue || 0),
+        meals: acc.meals + Number(d.meals || 0),
+      }),
+      { revenue: 0, meals: 0 }
+    );
+  }, [data?.sevenDayTrend]);
 
   if (loading) {
     return (
-      <div className="py-32 text-center text-xs sm:text-sm text-muted flex flex-col items-center justify-center gap-3">
-        <div className="size-8 border-2 border-slate-200 border-t-primary rounded-full animate-spin" />
-        <span className="font-medium text-xs text-muted">Đang tổng hợp dữ liệu phân tích vận hành F&B...</span>
+      <div className="py-28 text-center flex flex-col items-center justify-center gap-3">
+        <div className="size-7 border-2 border-slate-200 border-t-[#0057b8] rounded-full animate-spin" />
+        <span className="text-xs text-slate-400">Đang tải dữ liệu tổng quan...</span>
       </div>
     );
   }
 
   if (error && !data) {
     return (
-      <div className="py-24 text-center max-w-md mx-auto flex flex-col items-center justify-center gap-4">
-        <div className="size-14 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center">
-          <AlertTriangle className="size-7" />
+      <div className="py-20 text-center max-w-md mx-auto flex flex-col items-center justify-center gap-3">
+        <AlertTriangle className="size-8 text-rose-500" />
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold text-slate-900">Không thể tải dữ liệu</h3>
+          <p className="text-xs text-slate-500">{error}</p>
         </div>
-        <div className="space-y-1 text-center">
-          <h3 className="text-base font-bold text-foreground">Không thể tải dữ liệu Bảng điều khiển</h3>
-          <p className="text-xs text-muted max-w-sm mx-auto">{error}</p>
-        </div>
-        <Button variant="primary" icon={RefreshCw} onClick={fetchDashboard}>
+        <Button variant="primary" size="sm" icon={RefreshCw} onClick={fetchDashboard}>
           Thử lại
         </Button>
       </div>
@@ -103,183 +146,274 @@ export const DashboardPage: React.FC<DashboardProps> = ({ onNavigateTab }) => {
   const lowStockAlerts = data?.lowStockAlerts || [];
   const topDishes = data?.topDishes || [];
   const hourlyTraffic = data?.hourlyTraffic || [];
-  const peakInsight = data?.peakInsight || {};
-  const weekdayTraffic = data?.weekdayTraffic || [];
-  const weekdayInsight = data?.weekdayInsight || {};
   const sevenDayTrend = data?.sevenDayTrend || [];
 
-  const getCategoryBadge = (category: string) => {
-    switch (category) {
-      case 'MAIN':
-        return <Badge variant="brand">Món chính</Badge>;
-      case 'SIDE':
-        return <Badge variant="success">Món phụ</Badge>;
-      case 'DRINK':
-        return <Badge variant="neutral">Đồ uống</Badge>;
-      case 'DESSERT':
-        return <Badge variant="warning">Tráng miệng</Badge>;
-      default:
-        return <Badge variant="neutral">{category || 'Món ăn'}</Badge>;
-    }
-  };
+  const totalMealsToday =
+    Number(summary.totalCheckinsToday || 0) + Number(summary.totalOrdersToday || 0);
+  const alertCount = summary.lowStockAlertCount ?? lowStockAlerts.length ?? 0;
 
-  const tabItems: { id: DashboardTab; label: string; count?: number }[] = [
-    { id: 'overview', label: 'Xu hướng 7 ngày & Cơ sở' },
-    { id: 'dishes', label: 'Món bán chạy nhất', count: topDishes.length > 0 ? topDishes.length : undefined },
-    { id: 'traffic', label: 'Giờ cao điểm & Lưu lượng' },
-    { id: 'alerts', label: 'Cảnh báo nguyên liệu', count: lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined },
+  // Compare today vs previous day from 7-day trend if available
+  const prevDay = sevenDayTrend.length >= 2 ? sevenDayTrend[sevenDayTrend.length - 2] : null;
+  const revDeltaPct =
+    prevDay && Number(prevDay.revenue) > 0
+      ? ((Number(summary.totalRevenueToday || 0) - Number(prevDay.revenue)) / Number(prevDay.revenue)) *
+        100
+      : null;
+  const mealsDeltaPct =
+    prevDay && Number(prevDay.meals) > 0
+      ? ((totalMealsToday - Number(prevDay.meals)) / Number(prevDay.meals)) * 100
+      : null;
+
+  const tabs: {
+    id: DashboardTab;
+    label: string;
+    icon: React.ComponentType<{ className?: string; weight?: 'regular' | 'fill' }>;
+    count?: number;
+  }[] = [
+    { id: 'overview', label: 'Tổng quan (7 ngày)', icon: ChartLineUp },
+    { id: 'dishes', label: 'Món bán chạy nhất', icon: Fire },
+    { id: 'traffic', label: 'Giờ cao điểm & Lưu lượng', icon: Clock },
+    {
+      id: 'alerts',
+      label: 'Cảnh báo nguyên liệu',
+      icon: AlertTriangle,
+      count: alertCount > 0 ? alertCount : undefined,
+    },
   ];
 
   return (
-    <div className="space-y-6">
-
-      {/* Error banner with retry if refresh encounters error */}
+    <div className="space-y-4 max-w-6xl mx-auto">
       {error && (
-        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2 text-rose-700 font-medium">
-            <AlertTriangle className="size-4 shrink-0 text-rose-600" />
-            <span>{error}</span>
-          </div>
+        <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-xs">
+          <span className="text-rose-700">{error}</span>
           <Button variant="outline" size="sm" icon={RefreshCw} onClick={fetchDashboard}>
             Thử lại
           </Button>
         </div>
       )}
 
-      {/* 4 Metric Cards - Modern Clean Enterprise */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1: Doanh thu hôm nay */}
-        <div className="bg-surface rounded-xl border border-border p-5 flex flex-col justify-between shadow-xs transition-shadow hover:shadow-sm">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted">Doanh thu hôm nay</span>
-              <div className="size-8 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center">
-                <Wallet className="size-4" />
+      {/* TOP 4 KPI CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Card 1: Hero Revenue Card */}
+        <div className="rounded-2xl bg-gradient-to-br from-[#0057b8] to-[#004494] text-white p-3.5 shadow-xs flex flex-col justify-between relative overflow-hidden">
+          <div className="space-y-1.5 relative z-10">
+            <div className="size-7 rounded-lg bg-white/15 flex items-center justify-center">
+              <Wallet weight="fill" className="size-3.5 text-white" />
+            </div>
+            <div>
+              <span className="text-[11px] text-blue-100 block">Doanh thu hôm nay</span>
+              <div className="mt-0.5 font-numeric text-xl font-bold tracking-tight">
+                {formatVND(summary.totalRevenueToday)}
               </div>
             </div>
-            <div className="text-2xl font-bold tabular-nums text-foreground mt-2 tracking-tight">
-              {formatVND(summary.totalRevenueToday)}
-            </div>
+            {revDeltaPct !== null && (
+              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/15 text-[10.5px] text-white">
+                <TrendUp className="size-3" />
+                <span>
+                  {revDeltaPct >= 0 ? '+' : ''}
+                  {revDeltaPct.toFixed(1)}% so với hôm qua
+                </span>
+              </div>
+            )}
           </div>
-          <div className="text-xs text-muted mt-3 pt-2.5 border-t border-border/80 flex items-center justify-between">
-            <span>Tháng này:</span>
-            <span className="text-foreground font-semibold tabular-nums">{formatVND(summary.totalRevenueMonth)}</span>
+
+          <div className="pt-2 mt-2.5 border-t border-white/15 flex items-center justify-between text-[11px] relative z-10">
+            <span className="text-blue-100">Tháng này</span>
+            <span className="font-numeric font-semibold">{formatVND(summary.totalRevenueMonth)}</span>
           </div>
         </div>
 
-        {/* Metric 2: Lượt phục vụ */}
-        <div className="bg-surface rounded-xl border border-border p-5 flex flex-col justify-between shadow-xs transition-shadow hover:shadow-sm">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted">Suất ăn phục vụ hôm nay</span>
-              <div className="size-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center">
-                <Utensils className="size-4" />
+        {/* Card 2: Meals Served */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-2xs flex flex-col justify-between">
+          <div className="space-y-1.5">
+            <div className="size-7 rounded-lg bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center">
+              <Utensils className="size-3.5" />
+            </div>
+            <div>
+              <span className="text-[11px] text-slate-500 block">Suất ăn phục vụ</span>
+              <div className="mt-0.5 flex items-baseline gap-1.5">
+                <span className="font-numeric text-xl font-bold text-slate-900">
+                  {totalMealsToday}
+                </span>
+                <span className="text-[11px] text-slate-400">suất</span>
               </div>
             </div>
-            <div className="text-2xl font-bold tabular-nums text-foreground mt-2 tracking-tight">
-              {Number(summary.totalCheckinsToday || 0) + Number(summary.totalOrdersToday || 0)}{' '}
-              <span className="text-xs font-normal text-muted">suất</span>
-            </div>
+            {mealsDeltaPct !== null && (
+              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#EFF6FF] text-[10.5px] text-[#0057b8] font-medium">
+                <TrendUp className="size-3" />
+                <span>
+                  {mealsDeltaPct >= 0 ? '+' : ''}
+                  {mealsDeltaPct.toFixed(1)}% so với hôm qua
+                </span>
+              </div>
+            )}
           </div>
-          <div className="text-xs text-muted mt-3 pt-2.5 border-t border-border/80 flex items-center justify-between">
-            <span>Đặt trước: <strong className="text-foreground font-semibold tabular-nums">{summary.totalOrdersToday || 0}</strong></span>
-            <span>Vãng lai: <strong className="text-foreground font-semibold tabular-nums">{summary.totalCheckinsToday || 0}</strong></span>
+
+          <div className="pt-2 mt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span>
+              Đặt trước: <strong className="text-slate-800 font-semibold font-numeric">{summary.totalOrdersToday || 0}</strong>
+            </span>
+            <span className="text-slate-300">|</span>
+            <span>
+              Vãng lai: <strong className="text-slate-800 font-semibold font-numeric">{summary.totalCheckinsToday || 0}</strong>
+            </span>
           </div>
         </div>
 
-        {/* Metric 3: Khung giờ cao điểm */}
-        <div
+        {/* Card 3: Peak Hour */}
+        <button
+          type="button"
           onClick={() => setActiveTab('traffic')}
-          className="bg-surface rounded-xl border border-border p-5 flex flex-col justify-between cursor-pointer hover:border-slate-300 hover:bg-slate-50/50 transition-all group shadow-xs"
+          className="bg-white rounded-2xl border border-slate-200/80 hover:border-[#0057b8]/50 p-3.5 shadow-2xs flex flex-col justify-between text-left transition-all cursor-pointer group"
         >
-          <div>
+          <div className="space-y-1.5 w-full">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted">Khung giờ cao điểm</span>
-              <div className="size-8 rounded-lg bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center">
-                <Clock className="size-4" />
+              <div className="size-7 rounded-lg bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center">
+                <Clock className="size-3.5" />
+              </div>
+              <CaretRight className="size-3.5 text-slate-300 group-hover:text-[#0057b8] transition-colors" />
+            </div>
+            <div>
+              <span className="text-[11px] text-slate-500 block">Khung giờ cao điểm</span>
+              <div className="mt-0.5 font-mono text-xl font-bold text-slate-900 tracking-tight">
+                {summary.peakHourSlot || '—'}
               </div>
             </div>
-            <div className="text-2xl font-bold text-foreground mt-2 tracking-tight font-mono">
-              {summary.peakHourSlot || 'Chưa đủ dữ liệu'}
-            </div>
           </div>
-          <div className="text-xs text-muted mt-3 pt-2.5 border-t border-border/80 flex items-center justify-between">
-            <span>Đông nhất: <strong className="text-foreground font-semibold">{summary.busiestDay || 'Chưa đủ dữ liệu'}</strong></span>
-            <ArrowRight className="size-3.5 text-muted group-hover:text-primary transition-colors" />
-          </div>
-        </div>
 
-        {/* Metric 4: Cảnh báo tồn kho */}
+          <div className="pt-2 mt-2.5 border-t border-slate-100 flex items-center gap-1.5 text-[11px] text-slate-500 w-full">
+            <Calendar className="size-3.5 text-slate-400 shrink-0" />
+            <span>
+              Đông nhất: <strong className="text-slate-800 font-semibold">{summary.busiestDay || '—'}</strong>
+            </span>
+          </div>
+        </button>
+
+        {/* Card 4: Low Stock Alerts */}
         <div
-          onClick={() => setActiveTab('alerts')}
-          className="bg-surface rounded-xl border border-border p-5 flex flex-col justify-between cursor-pointer hover:border-slate-300 hover:bg-slate-50/50 transition-all group shadow-xs"
+          className={`rounded-2xl border p-3.5 shadow-2xs flex flex-col justify-between ${
+            alertCount > 0
+              ? 'bg-rose-50/55 border-rose-200/80'
+              : 'bg-white border-slate-200/80'
+          }`}
         >
-          <div>
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted">Nguyên liệu sắp hết</span>
-              <div className={`size-8 rounded-lg flex items-center justify-center border ${
-                lowStockAlerts.length > 0
-                  ? 'bg-rose-50 text-rose-600 border-rose-100'
-                  : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-              }`}>
-                {lowStockAlerts.length > 0 ? (
-                  <AlertTriangle className="size-4" />
+              <div
+                className={`size-7 rounded-lg flex items-center justify-center ${
+                  alertCount > 0
+                    ? 'bg-rose-100/80 text-rose-600'
+                    : 'bg-emerald-50 text-emerald-600'
+                }`}
+              >
+                {alertCount > 0 ? (
+                  <AlertTriangle className="size-3.5" />
                 ) : (
-                  <PackageCheck className="size-4" />
+                  <CheckCircle2 className="size-3.5" />
                 )}
               </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('alerts')}
+                className="text-slate-400 hover:text-slate-700 cursor-pointer"
+                aria-label="Xem cảnh báo"
+              >
+                <CaretRight className="size-3.5" />
+              </button>
             </div>
-            <div className="text-2xl font-bold tabular-nums text-foreground mt-2 tracking-tight">
-              {summary.lowStockAlertCount || 0}{' '}
-              <span className="text-xs font-normal text-muted">mặt hàng</span>
+            <div>
+              <span className="text-[11px] text-slate-500 block">Nguyên liệu sắp hết</span>
+              <div className="mt-0.5 flex items-baseline gap-1.5">
+                <span className="font-numeric text-xl font-bold text-slate-900">
+                  {alertCount}
+                </span>
+                <span className="text-[11px] text-slate-500">mặt hàng</span>
+              </div>
             </div>
           </div>
-          <div className="text-xs text-muted mt-3 pt-2.5 border-t border-border/80 flex items-center justify-between">
-            <span className={lowStockAlerts.length > 0 ? 'text-rose-600 font-semibold' : 'text-emerald-600 font-medium'}>
-              {lowStockAlerts.length > 0 ? 'Dưới định mức an toàn' : 'Tồn kho ổn định'}
-            </span>
-            <ArrowRight className="size-3.5 text-muted group-hover:text-primary transition-colors" />
+
+          <div className="mt-2.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab('alerts')}
+              className="w-full h-7 rounded-full bg-white border border-slate-200/90 hover:border-[#0057b8] hover:text-[#0057b8] text-[11px] font-medium text-slate-700 transition-colors cursor-pointer shadow-2xs"
+            >
+              Xem danh sách
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Navigation Layer Tabs */}
-      <Tabs items={tabItems} activeTab={activeTab} onChange={(id) => setActiveTab(id as DashboardTab)} />
-
-      {/* TAB 1: 7-DAY TREND & CANTEEN PERFORMANCE */}
-      {activeTab === 'overview' && (
-        <div className="space-y-6">
-          {/* Main Trend Chart Card */}
-          <div className="bg-surface rounded-xl border border-border p-5 sm:p-6 space-y-4 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <TrendingUp className="size-4 text-primary" />
-                  <span>Xu hướng doanh thu & Lượt suất ăn 7 ngày qua</span>
-                </h3>
-                <p className="text-xs text-muted mt-0.5">
-                  Theo dõi biến động doanh thu và tổng số suất ăn theo từng ngày
-                </p>
-              </div>
-
-              {/* Metric Toggle */}
-              <div className="flex items-center border border-border rounded-lg bg-slate-50 p-0.5 text-xs shadow-xs self-start sm:self-auto">
-                <button
-                  onClick={() => setTrendMetric('revenue')}
-                  className={`px-3 py-1 rounded-md font-medium transition-all cursor-pointer outline-hidden ${
-                    trendMetric === 'revenue'
-                      ? 'bg-surface text-foreground font-semibold shadow-xs border border-border/70'
-                      : 'text-muted hover:text-foreground'
+      {/* SECTION NAVIGATION PILLS */}
+      <div className="flex flex-wrap items-center gap-2">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`h-8.5 px-3.5 rounded-full text-xs transition-all inline-flex items-center gap-1.5 cursor-pointer ${
+                isActive
+                  ? 'bg-[#0057b8] text-white font-semibold shadow-2xs'
+                  : 'bg-white border border-slate-200/80 text-slate-600 hover:text-slate-900 hover:border-slate-300 font-medium'
+              }`}
+            >
+              <Icon weight={isActive ? 'fill' : 'regular'} className="size-3.5 shrink-0" />
+              <span>{tab.label}</span>
+              {tab.count !== undefined && (
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-numeric font-semibold ${
+                    isActive
+                      ? 'bg-white/20 text-white'
+                      : 'bg-rose-500 text-white'
                   }`}
                 >
-                  Doanh thu (VND)
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* TAB 1: OVERVIEW BENTO GRID (LEFT CHART + RIGHT TOP DISHES & CANTEENS) */}
+      {activeTab === 'overview' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+          {/* Left Column: 7-Day Area/Line Chart + Total Summary Strip */}
+          <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-xl bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center shrink-0">
+                  <ChartLineUp className="size-4" />
+                </div>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  {trendMetric === 'revenue'
+                    ? 'Xu hướng doanh thu 7 ngày qua'
+                    : 'Xu hướng suất ăn 7 ngày qua'}
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-full w-fit shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setTrendMetric('revenue')}
+                  className={`h-7 px-3 rounded-full text-xs transition-all cursor-pointer ${
+                    trendMetric === 'revenue'
+                      ? 'bg-[#0057b8] text-white font-semibold shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 font-medium'
+                  }`}
+                >
+                  Doanh thu (VNĐ)
                 </button>
                 <button
+                  type="button"
                   onClick={() => setTrendMetric('meals')}
-                  className={`px-3 py-1 rounded-md font-medium transition-all cursor-pointer outline-hidden ${
+                  className={`h-7 px-3 rounded-full text-xs transition-all cursor-pointer ${
                     trendMetric === 'meals'
-                      ? 'bg-surface text-foreground font-semibold shadow-xs border border-border/70'
-                      : 'text-muted hover:text-foreground'
+                      ? 'bg-[#0057b8] text-white font-semibold shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900 font-medium'
                   }`}
                 >
                   Số suất ăn
@@ -287,359 +421,453 @@ export const DashboardPage: React.FC<DashboardProps> = ({ onNavigateTab }) => {
               </div>
             </div>
 
-            <div className="h-68 w-full pt-2">
+            <div className="h-68 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sevenDayTrend} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-                  <CartesianGrid vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="dateStr" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+                <AreaChart data={sevenDayTrend} margin={{ top: 12, right: 16, left: 0, bottom: 4 }}>
+                  <defs>
+                    <linearGradient id="minoAreaFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#0057b8" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="#0057b8" stopOpacity={0.01} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="dateStr"
+                    padding={{ left: 12, right: 12 }}
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                    axisLine={{ stroke: '#e2e8f0' }}
+                    tickLine={false}
+                  />
                   <YAxis
                     tick={{ fontSize: 11, fill: '#64748b' }}
                     axisLine={false}
                     tickLine={false}
-                    tickFormatter={(v) => trendMetric === 'revenue' ? `${v / 1000}k` : `${v}`}
+                    tickFormatter={(v) => (trendMetric === 'revenue' ? formatAxisVND(v) : `${v}`)}
                   />
                   <Tooltip
                     formatter={(value: any) => [
                       trendMetric === 'revenue' ? formatVND(value) : `${value} suất`,
-                      trendMetric === 'revenue' ? 'Doanh thu' : 'Số suất ăn'
+                      trendMetric === 'revenue' ? 'Doanh thu' : 'Số suất ăn',
                     ]}
                     labelFormatter={(label, payload) => {
                       const item = payload?.[0]?.payload;
                       return item ? `${item.dayLabel}, ${item.dateStr}` : label;
                     }}
                     contentStyle={{
-                      backgroundColor: '#ffffff',
-                      borderColor: '#e2e8f0',
+                      backgroundColor: '#0f172a',
+                      borderColor: '#0f172a',
                       borderRadius: '10px',
-                      color: '#0f172a',
+                      color: '#ffffff',
                       fontSize: '12px',
-                      boxShadow: '0 4px 12px -2px rgba(15, 23, 42, 0.08)',
+                      boxShadow: '0 8px 20px -4px rgba(15, 23, 42, 0.25)',
                     }}
+                    itemStyle={{ color: '#ffffff', fontWeight: 600 }}
+                    labelStyle={{ color: '#93c5fd', fontSize: '11px', marginBottom: '2px' }}
                   />
-                  <Bar
+                  <Area
+                    type="monotone"
                     dataKey={trendMetric === 'revenue' ? 'revenue' : 'meals'}
-                    fill="#0062d2"
-                    radius={[5, 5, 0, 0]}
-                    name={trendMetric === 'revenue' ? 'Doanh thu' : 'Suất ăn'}
+                    stroke="#0057b8"
+                    strokeWidth={2.5}
+                    fill="url(#minoAreaFill)"
+                    dot={{ r: 4, fill: '#ffffff', stroke: '#0057b8', strokeWidth: 2.5 }}
+                    activeDot={{ r: 5.5, fill: '#0057b8', stroke: '#ffffff', strokeWidth: 2 }}
                     isAnimationActive={false}
                   />
-                </BarChart>
+                </AreaChart>
               </ResponsiveContainer>
+            </div>
+
+            {/* Bottom 7-Day Summary Strip */}
+            <div className="px-3.5 py-2.5 rounded-xl bg-[#EFF6FF]/70 border border-[#0057b8]/15 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-700">
+              <Info className="size-4 text-[#0057b8] shrink-0" />
+              <span>
+                Tổng doanh thu 7 ngày:{' '}
+                <strong className="font-numeric font-semibold text-slate-900">
+                  {formatVND(sevenDayTotals.revenue)}
+                </strong>
+              </span>
+              <span className="text-slate-300">|</span>
+              <span>
+                Tổng suất ăn:{' '}
+                <strong className="font-numeric font-semibold text-slate-900">
+                  {sevenDayTotals.meals.toLocaleString('vi-VN')} suất
+                </strong>
+              </span>
             </div>
           </div>
 
-          {/* Performance By Canteen */}
-          <div className="bg-surface rounded-xl border border-border shadow-xs overflow-hidden">
-            <div className="p-5 border-b border-border flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">
-                  Hiệu suất hoạt động từng cơ sở Canteen hôm nay
-                </h3>
-                <p className="text-xs text-muted mt-0.5">
-                  Đối soát số lượng suất ăn và doanh thu phát sinh theo điểm bán
-                </p>
+          {/* Right Column: Top 3 Selling Dishes + Canteen Performance */}
+          <div className="lg:col-span-5 space-y-4">
+            {/* Top Right Card: Top Selling Dishes */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-4 sm:p-5 space-y-3.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Crown className="size-4 text-[#0057b8]" />
+                  <h3 className="text-xs font-semibold text-slate-900">
+                    Món bán chạy nhất <span className="font-normal text-slate-400">(7 ngày)</span>
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('dishes')}
+                  className="text-xs text-[#0057b8] hover:underline font-medium inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Xem chi tiết</span>
+                  <ArrowRight className="size-3" />
+                </button>
               </div>
-              <button
-                onClick={() => onNavigateTab('canteens')}
-                className="text-xs text-primary hover:underline font-semibold flex items-center gap-1.5 transition-colors cursor-pointer outline-hidden"
-              >
-                <span>Quản lý cơ sở</span>
-                <ArrowRight className="size-3.5" />
-              </button>
+
+              <div className="divide-y divide-slate-100">
+                {topDishes.slice(0, 3).map((dish: any, idx: number) => (
+                  <div
+                    key={dish.id}
+                    className="py-2.5 first:pt-1 last:pb-1 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <span className="size-6 rounded-lg bg-slate-100 text-slate-600 font-mono text-[11px] font-semibold flex items-center justify-center shrink-0">
+                        {dish.rank ?? idx + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-slate-800 truncate" title={dish.name}>
+                          {dish.name}
+                        </div>
+                        <div className="text-[11px] text-slate-400 font-numeric">
+                          {Number(dish.totalOrdered || 0).toLocaleString('vi-VN')} suất
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 shrink-0 w-28">
+                      <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-[#0057b8]"
+                          style={{ width: `${Math.min(100, Number(dish.percentage || 0))}%` }}
+                        />
+                      </div>
+                      <span className="font-mono text-[11px] text-slate-600 tabular-nums w-8 text-right">
+                        {dish.percentage}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50/80 text-muted uppercase text-[10.5px] font-semibold border-b border-border">
-                  <tr>
-                    <th className="px-5 py-3">Cơ sở Canteen</th>
-                    <th className="px-5 py-3">Địa chỉ</th>
-                    <th className="px-5 py-3 text-center">Suất ăn hôm nay</th>
-                    <th className="px-5 py-3 text-right">Doanh thu hôm nay</th>
-                    <th className="px-5 py-3 text-center">Trạng thái</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/70">
+            {/* Bottom Right Card: Canteen Performance */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-4 sm:p-5 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="size-6 rounded-lg bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center">
+                    <Building2 className="size-3.5" />
+                  </div>
+                  <h3 className="text-xs font-semibold text-slate-900">Hiệu suất theo cơ sở</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('canteens')}
+                  className="text-xs text-[#0057b8] hover:underline font-medium inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Xem chi tiết</span>
+                  <ArrowRight className="size-3" />
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <div className="grid grid-cols-[minmax(120px,1.4fr)_100px_56px_74px] items-center gap-2 px-2 py-1 text-[11px] text-slate-400">
+                  <span>Cơ sở</span>
+                  <span className="text-right">Doanh thu</span>
+                  <span className="text-right">Suất</span>
+                  <span className="text-right">Trạng thái</span>
+                </div>
+
+                <div className="divide-y divide-slate-100">
                   {canteensPerformance.map((c: any) => (
-                    <tr key={c.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="px-5 py-3.5 font-semibold text-foreground">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="size-4 text-muted shrink-0" />
-                          <span>{c.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5 text-muted max-w-xs truncate">{c.address || '—'}</td>
-                      <td className="px-5 py-3.5 text-center font-semibold text-foreground tabular-nums">
-                        {c.checkinCount + c.orderCount} <span className="font-normal text-muted text-[11px]">suất</span>
-                      </td>
-                      <td className="px-5 py-3.5 text-right font-semibold text-foreground tabular-nums">
+                    <div
+                      key={c.id}
+                      className="grid grid-cols-[minmax(120px,1.4fr)_100px_56px_74px] items-center gap-2 px-2 py-2.5 text-xs"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Building2 className="size-3.5 text-[#0057b8] shrink-0" />
+                        <span className="font-medium text-slate-800 truncate" title={c.name}>
+                          {c.name}
+                        </span>
+                      </div>
+                      <div className="text-right font-mono text-[11px] font-medium text-slate-800 tabular-nums">
                         {formatVND(c.todayRevenue)}
-                      </td>
-                      <td className="px-5 py-3.5 text-center">
-                        <Badge variant={c.isActive ? 'success' : 'neutral'} dot>
-                          {c.isActive ? 'Đang mở' : 'Đóng'}
-                        </Badge>
-                      </td>
-                    </tr>
+                      </div>
+                      <div className="text-right font-mono text-[11px] text-slate-600 tabular-nums">
+                        {Number(c.checkinCount || 0) + Number(c.orderCount || 0)}
+                      </div>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span
+                          className={`size-1.5 rounded-full shrink-0 ${
+                            c.isActive ? 'bg-emerald-500' : 'bg-slate-400'
+                          }`}
+                        />
+                        <span
+                          className={`text-[11px] ${
+                            c.isActive ? 'text-emerald-700' : 'text-slate-400'
+                          }`}
+                        >
+                          {c.isActive ? 'Mở' : 'Đóng'}
+                        </span>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 2: TOP SELLING DISHES */}
+      {/* TAB 2: TOP SELLING DISHES (FULL LIST) */}
       {activeTab === 'dishes' && (
-        <div className="space-y-4">
-          <div className="bg-surface p-5 sm:p-6 rounded-xl border border-border shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">
-                  Bảng xếp hạng món ăn bán chạy nhất (Top Dishes)
-                </h3>
-                <p className="text-xs text-muted mt-0.5">
-                  Phân tích món được yêu thích nhất để dự trù nguyên liệu và lên thực đơn tuần hiệu quả
-                </p>
-              </div>
-              <button
-                onClick={() => onNavigateTab('menu')}
-                className="text-xs text-primary hover:underline font-semibold flex items-center gap-1.5 transition-colors cursor-pointer outline-hidden"
-              >
-                <span>Xem thực đơn tuần</span>
-                <ArrowRight className="size-3.5" />
-              </button>
-            </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-xs font-semibold text-slate-700">Bảng xếp hạng món bán chạy nhất</h3>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('menu')}
+              className="text-xs text-[#0057b8] hover:underline font-medium inline-flex items-center gap-1 cursor-pointer"
+            >
+              <span>Xem thực đơn</span>
+              <ArrowRight className="size-3" />
+            </button>
+          </div>
 
-            <div className="space-y-2.5">
-              {topDishes.map((dish: any, index: number) => (
+          <div className="space-y-2">
+            {topDishes.map((dish: any, index: number) => {
+              const catMeta = getCategoryMeta(dish.category);
+
+              return (
                 <div
                   key={dish.id}
-                  className="p-3.5 rounded-xl border border-border hover:bg-slate-50/70 transition-colors bg-surface flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
+                  className="bg-white rounded-xl border border-slate-200/75 hover:border-[#0057b8] hover:shadow-xs px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="size-7 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-semibold shrink-0 text-foreground tabular-nums border border-border">
-                      #{dish.rank}
+                    <span className="font-mono text-xs text-slate-400 w-5 shrink-0 tabular-nums">
+                      {String(dish.rank ?? index + 1).padStart(2, '0')}
                     </span>
-
                     <div className="min-w-0">
-                      <div className="font-semibold text-sm text-foreground flex items-center gap-2 truncate">
-                        <span>{dish.name}</span>
-                        {getCategoryBadge(dish.category)}
+                      <div className="text-xs font-medium text-slate-800 truncate">
+                        {dish.name}
                       </div>
-                      <div className="text-xs text-muted mt-0.5">
-                        {dish.extraPrice > 0 ? `Phụ thu: +${formatVND(dish.extraPrice)}` : 'Suất chuẩn'}
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mt-0.5">
+                        <span className={`size-1.5 rounded-full shrink-0 ${catMeta.dot}`} />
+                        <span>{catMeta.label}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Quantity & Progress Bar */}
                   <div className="flex items-center gap-4 shrink-0 sm:w-72">
                     <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-semibold text-foreground tabular-nums">{dish.totalOrdered} suất</span>
-                        <span className="text-muted text-[11px] tabular-nums">{dish.percentage}%</span>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-mono text-slate-700 tabular-nums">
+                          {dish.totalOrdered} suất
+                        </span>
+                        <span className="font-mono text-slate-400 tabular-nums">
+                          {dish.percentage}%
+                        </span>
                       </div>
-                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                         <div
-                          className="h-full rounded-full transition-all duration-300"
+                          className="h-full rounded-full"
                           style={{
                             width: `${dish.percentage}%`,
-                            backgroundColor: index === 0 ? '#0062d2' : '#94a3b8'
+                            backgroundColor: index === 0 ? '#0057b8' : '#cbd5e1',
                           }}
                         />
                       </div>
                     </div>
 
-                    <div className="text-right min-w-[85px]">
-                      <div className="text-xs font-semibold text-foreground tabular-nums">
-                        {formatVND(dish.revenue)}
-                      </div>
-                      <div className="text-[11px] text-muted">doanh thu ước tính</div>
+                    <div className="text-right font-mono text-xs font-medium text-slate-800 tabular-nums min-w-[92px]">
+                      {formatVND(dish.revenue)}
                     </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: TRAFFIC */}
+      {activeTab === 'traffic' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2.5">
+              <div className="size-8 rounded-xl bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center shrink-0">
+                <Clock className="size-4" />
+              </div>
+              <h3 className="text-sm font-semibold text-slate-900">Phân bổ khung giờ trong ngày</h3>
+            </div>
+
+            <div className="space-y-3">
+              {hourlyTraffic.map((slot: any) => (
+                <div key={slot.slot} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`size-1.5 rounded-full shrink-0 ${
+                          slot.isPeak ? 'bg-[#0057b8]' : 'bg-slate-300'
+                        }`}
+                      />
+                      <span className="font-mono text-slate-800">{slot.slot}</span>
+                      <span className="text-[11px] text-slate-400">{slot.label}</span>
+                    </div>
+                    <div className="font-mono text-xs text-slate-700 tabular-nums">
+                      {slot.count} <span className="text-slate-400">({slot.percentage}%)</span>
+                    </div>
+                  </div>
+
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${slot.percentage}%`,
+                        backgroundColor: slot.isPeak ? '#0057b8' : '#cbd5e1',
+                      }}
+                    />
                   </div>
                 </div>
               ))}
             </div>
+          </div>
 
-            {/* Actionable Kitchen Insight */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-foreground space-y-1">
-              <div className="font-semibold text-foreground">
-                Khuyến nghị vận hành bếp:
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2.5">
+              <div className="size-8 rounded-xl bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center shrink-0">
+                <ChartLineUp className="size-4" />
               </div>
-              <p className="leading-relaxed text-foreground-subtle">
-                Top 2 món ăn đứng đầu chiếm gần 50% nhu cầu toàn hệ thống. Bếp trưởng nên chốt số lượng sơ chế và định mức BOM từ chiều hôm trước, ưu tiên nhập nguyên liệu tươi vào sáng sớm để tránh hao hụt và trễ giờ ra món.
-              </p>
+              <h3 className="text-sm font-semibold text-slate-900">Lưu lượng theo ngày trong tuần</h3>
+            </div>
+
+            <div className="h-56 w-full pt-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={normalizedWeekdayTraffic}
+                  margin={{ top: 12, right: 16, left: 0, bottom: 4 }}
+                >
+                  <defs>
+                    <linearGradient id="trafficAreaFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#0057b8" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="#0057b8" stopOpacity={0.01} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="#f1f5f9" strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="label"
+                    padding={{ left: 12, right: 12 }}
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                    axisLine={{ stroke: '#e2e8f0' }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#64748b' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    formatter={(value: any) => [`${value} suất`, 'Lượng phục vụ']}
+                    contentStyle={{
+                      backgroundColor: '#0f172a',
+                      borderColor: '#0f172a',
+                      borderRadius: '10px',
+                      color: '#ffffff',
+                      fontSize: '12px',
+                      boxShadow: '0 8px 20px -4px rgba(15, 23, 42, 0.25)',
+                    }}
+                    itemStyle={{ color: '#ffffff', fontWeight: 600 }}
+                    labelStyle={{ color: '#93c5fd', fontSize: '11px', marginBottom: '2px' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="meals"
+                    stroke="#0057b8"
+                    strokeWidth={2.5}
+                    fill="url(#trafficAreaFill)"
+                    dot={{ r: 4, fill: '#ffffff', stroke: '#0057b8', strokeWidth: 2.5 }}
+                    activeDot={{ r: 5.5, fill: '#0057b8', stroke: '#ffffff', strokeWidth: 2 }}
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 3: PEAK HOURS & WEEKDAY TRAFFIC */}
-      {activeTab === 'traffic' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Panel 1: Giờ cao điểm */}
-            <div className="bg-surface p-5 sm:p-6 rounded-xl border border-border shadow-xs space-y-4">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <Clock className="size-4 text-primary" />
-                  <span>Phân bổ khung giờ phục vụ trong ngày</span>
-                </h3>
-                <p className="text-xs text-muted mt-0.5">
-                  Xác định thời điểm khách tập trung đông nhất để bố trí nhân viên tiếp món
-                </p>
-              </div>
-
-              <div className="space-y-3 pt-1">
-                {hourlyTraffic.map((slot: any) => (
-                  <div key={slot.slot} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground font-mono">{slot.slot}</span>
-                        <span className="text-muted text-[11px]">({slot.label})</span>
-                        {slot.isPeak && (
-                          <Badge variant="brand">Cao điểm nhất</Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground tabular-nums">{slot.count} lượt</span>
-                        <span className="text-muted text-[11px] w-8 text-right tabular-nums">{slot.percentage}%</span>
-                      </div>
-                    </div>
-
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-300"
-                        style={{
-                          width: `${slot.percentage}%`,
-                          backgroundColor: slot.isPeak ? '#0062d2' : '#94a3b8'
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="bg-slate-50 border border-border rounded-xl p-3 text-xs text-foreground-subtle">
-                <span className="font-semibold text-foreground">Chỉ dẫn quầy gắp: </span>
-                {peakInsight.recommendation}
-              </div>
-            </div>
-
-            {/* Panel 2: Thứ trong tuần đông khách */}
-            <div className="bg-surface p-5 sm:p-6 rounded-xl border border-border shadow-xs space-y-4">
-              <div>
-                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <Calendar className="size-4 text-slate-500" />
-                  <span>Lưu lượng khách theo các thứ trong tuần</span>
-                </h3>
-                <p className="text-xs text-muted mt-0.5">
-                  Thống kê các ngày trong tuần để điều chỉnh lượng thực phẩm nhập kho
-                </p>
-              </div>
-
-              <div className="h-56 w-full pt-1">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={weekdayTraffic} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-                    <CartesianGrid vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="shortDay" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}`} />
-                    <Tooltip
-                      formatter={(value: any) => [`${value} suất`, 'Lượng phục vụ']}
-                      labelFormatter={(label, payload) => {
-                        const item = payload?.[0]?.payload;
-                        return item ? `${item.day}` : label;
-                      }}
-                      contentStyle={{
-                        backgroundColor: '#ffffff',
-                        borderColor: '#e2e8f0',
-                        borderRadius: '10px',
-                        color: '#0f172a',
-                        fontSize: '12px',
-                        boxShadow: '0 4px 12px -2px rgba(15, 23, 42, 0.08)',
-                      }}
-                    />
-                    <Bar dataKey="meals" radius={[5, 5, 0, 0]} name="Suất ăn" isAnimationActive={false}>
-                      {weekdayTraffic.map((entry: any, index: number) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={entry.isBusiest ? '#0062d2' : '#cbd5e1'}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="bg-slate-50 border border-border rounded-xl p-3 text-xs text-foreground-subtle">
-                <span className="font-semibold text-foreground">Chiến lược tồn kho: </span>
-                {weekdayInsight.recommendation}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: ALERTS (LOW STOCK) */}
+      {/* TAB 4: LOW STOCK ALERTS (FLOATING ROW-CARDS) */}
       {activeTab === 'alerts' && (
-        <div className="bg-surface rounded-xl border border-border shadow-xs overflow-hidden">
-          <div className="p-5 border-b border-border flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-foreground">
-                Danh sách mặt hàng nguyên liệu dưới mức an toàn
-              </h3>
-              <p className="text-xs text-muted mt-0.5">
-                Các nguyên liệu cần tạo phiếu nhập kho khẩn để tránh ảnh hưởng ca bếp tiếp theo
-              </p>
-            </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-xs font-semibold text-slate-700">
+              Nguyên liệu dưới định mức an toàn
+            </h3>
             <button
+              type="button"
               onClick={() => onNavigateTab('inventory')}
-              className="text-xs text-primary hover:underline font-semibold transition-colors cursor-pointer outline-hidden"
+              className="text-xs text-[#0057b8] hover:underline font-medium inline-flex items-center gap-1 cursor-pointer"
             >
-              Mở sổ kho quản lý
+              <span>Mở kho nguyên liệu</span>
+              <ArrowRight className="size-3" />
             </button>
           </div>
 
           {lowStockAlerts.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50/80 text-muted uppercase text-[10.5px] font-semibold border-b border-border">
-                  <tr>
-                    <th className="px-5 py-3">Nguyên liệu</th>
-                    <th className="px-5 py-3">Cơ sở</th>
-                    <th className="px-5 py-3 text-right">Tồn kho hiện tại</th>
-                    <th className="px-5 py-3 text-right">Ngưỡng tối thiểu</th>
-                    <th className="px-5 py-3 text-right">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/70">
-                  {lowStockAlerts.map((item: any) => (
-                    <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="px-5 py-3.5 font-semibold text-foreground">{item.name}</td>
-                      <td className="px-5 py-3.5 text-muted">{item.canteen?.name || 'Toàn chuỗi'}</td>
-                      <td className="px-5 py-3.5 text-right font-semibold text-rose-600 font-mono tabular-nums">
-                        {Number(item.currentStock || item.currentQty).toLocaleString()} {item.unit}
-                      </td>
-                      <td className="px-5 py-3.5 text-right text-muted font-mono tabular-nums">
-                        {Number(item.minStock || item.minQty).toLocaleString()} {item.unit}
-                      </td>
-                      <td className="px-5 py-3.5 text-right">
+            <div className="overflow-x-auto pb-1">
+              <div className="min-w-[600px] space-y-2">
+                <div className="grid grid-cols-[minmax(180px,1.4fr)_minmax(160px,1.2fr)_110px_110px_100px] items-center gap-3 px-4 py-1 text-xs font-medium text-slate-400">
+                  <span>Nguyên liệu</span>
+                  <span>Cơ sở</span>
+                  <span className="text-right">Tồn kho</span>
+                  <span className="text-right">Tối thiểu</span>
+                  <span className="text-right">Thao tác</span>
+                </div>
+
+                {lowStockAlerts.map((item: any) => {
+                  const currentVal = Number(item.currentStock ?? item.currentQty ?? 0);
+                  const minVal = Number(item.minStock ?? item.minQty ?? item.minThreshold ?? 0);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="bg-white rounded-xl border border-slate-200/75 hover:border-[#0057b8] hover:shadow-xs px-4 py-3 grid grid-cols-[minmax(180px,1.4fr)_minmax(160px,1.2fr)_110px_110px_100px] items-center gap-3 transition-all"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="size-1.5 rounded-full bg-rose-500 shrink-0" />
+                        <span className="text-xs font-medium text-slate-800 truncate">
+                          {item.name}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-500 truncate">
+                        {item.canteen?.name || item.canteenName || 'Toàn chuỗi'}
+                      </div>
+                      <div className="text-right font-mono text-xs font-medium text-rose-600 tabular-nums">
+                        {currentVal.toLocaleString('vi-VN')} {item.unit}
+                      </div>
+                      <div className="text-right font-mono text-xs text-slate-400 tabular-nums">
+                        {minVal.toLocaleString('vi-VN')} {item.unit}
+                      </div>
+                      <div className="flex justify-end">
                         <button
+                          type="button"
                           onClick={() => onNavigateTab('inventory')}
-                          className="text-xs text-primary hover:underline font-semibold transition-colors cursor-pointer outline-hidden"
+                          className="text-xs text-[#0057b8] hover:underline font-medium cursor-pointer"
                         >
                           Nhập thêm
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ) : (
-            <div className="py-14 text-center text-xs text-muted flex items-center justify-center gap-2">
-              <CheckCircle2 className="size-4 text-emerald-600" />
+            <div className="bg-white rounded-2xl border border-slate-200/80 py-14 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+              <CheckCircle2 className="size-4 text-emerald-500" />
               <span>Tất cả nguyên liệu đều ở mức an toàn.</span>
             </div>
           )}

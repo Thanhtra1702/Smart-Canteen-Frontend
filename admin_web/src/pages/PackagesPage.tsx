@@ -1,15 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Utensils, Calendar, CreditCard, Building2, Store, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  PlusIcon as Plus,
+  PencilSimpleIcon as Edit2,
+  TrashIcon as Trash2,
+  XIcon as X,
+  CreditCardIcon as CreditCard,
+  WarningIcon as AlertTriangle,
+} from '@phosphor-icons/react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Button } from '../components/ui/Button';
-import { Badge } from '../components/ui/Badge';
-import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
+import { SelectDropdown } from '../components/ui/SelectDropdown';
 
 export const PackagesPage: React.FC = () => {
-  const { user, selectedCanteenId, setSelectedCanteenId } = useAuth();
+  const { user, selectedCanteenId } = useAuth();
   const toast = useToast();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
@@ -31,7 +37,7 @@ export const PackagesPage: React.FC = () => {
   const [modalCanteenId, setModalCanteenId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchCanteens = async () => {
+  const fetchCanteens = useCallback(async () => {
     try {
       const res = await api.get('/canteens').catch(() => api.get('/admin-hq/canteens'));
       if (Array.isArray(res.data)) {
@@ -40,9 +46,9 @@ export const PackagesPage: React.FC = () => {
     } catch (err) {
       console.warn('Lỗi lấy danh sách cơ sở Canteen', err);
     }
-  };
+  }, []);
 
-  const fetchPackages = async () => {
+  const fetchPackages = useCallback(async () => {
     try {
       setLoading(true);
       const params: any = {};
@@ -56,15 +62,15 @@ export const PackagesPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCanteenId]);
 
   useEffect(() => {
     fetchCanteens();
-  }, []);
+  }, [fetchCanteens]);
 
   useEffect(() => {
     fetchPackages();
-  }, [selectedCanteenId]);
+  }, [fetchPackages]);
 
   const openCreateModal = () => {
     setEditingPkg(null);
@@ -145,22 +151,15 @@ export const PackagesPage: React.FC = () => {
     }
   };
 
-  const formatVND = (num: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
-  };
+  const formatVND = (num: number) => `${Math.round(num || 0).toLocaleString('vi-VN')} đ`;
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Quick Action Bar */}
+    <div className="space-y-4 max-w-6xl mx-auto">
+      {/* Minimal Action Bar */}
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <Badge variant="neutral" size="sm">
-            {packages.length} gói đang áp dụng
-          </Badge>
-          <span className="text-xs text-muted hidden sm:inline">
-            • Phân tách gói đăng ký theo từng cơ sở Canteen
-          </span>
-        </div>
+        <span className="text-xs text-slate-500">
+          {packages.length} gói đang áp dụng
+        </span>
 
         {isSuperAdmin && (
           <Button
@@ -178,109 +177,88 @@ export const PackagesPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {packages.map((pkg) => {
           const totalCredits = pkg.totalCredits || pkg.totalMeals || 60;
-          const priceNum = Number(pkg.price);
+          const duration = pkg.durationDays || 30;
+          const priceNum = Number(pkg.price || 0);
           const perMealPrice = totalCredits > 0 ? Math.round(priceNum / totalCredits) : 0;
 
           return (
-            <Card
+            <div
               key={pkg.id}
-              className="flex flex-col justify-between hover:border-border-strong hover:shadow-xs transition-all duration-200"
+              className="bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col justify-between hover:border-[#0057b8]/50 hover:shadow-2xs transition-all"
             >
-              <div className="space-y-3.5">
-                {/* Branch attribution badge */}
+              <div className="space-y-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-primary bg-primary/10 px-2.5 py-1 rounded-lg border border-primary/20 max-w-[220px] truncate">
-                    <Store className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{pkg.canteen?.name || 'Tất cả cơ sở'}</span>
-                  </div>
+                  <span
+                    className="text-[11px] text-slate-400 truncate"
+                    title={pkg.canteen?.name || 'Tất cả cơ sở'}
+                  >
+                    {pkg.canteen?.name || 'Tất cả cơ sở'}
+                  </span>
 
                   {isSuperAdmin && (
-                    <div className="flex items-center gap-1 shrink-0 -mr-1 -mt-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted hover:text-foreground"
-                        title="Chỉnh sửa"
+                    <div className="flex items-center gap-0.5 shrink-0 -mr-1.5">
+                      <button
+                        type="button"
                         onClick={() => openEditModal(pkg)}
+                        title="Chỉnh sửa"
+                        className="size-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted hover:text-danger hover:bg-danger/10"
-                        title="Vô hiệu hóa"
+                        <Edit2 className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setPkgToDelete(pkg)}
+                        title="Vô hiệu hóa"
+                        className="size-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                        <Trash2 className="size-3.5" />
+                      </button>
                     </div>
                   )}
                 </div>
 
-                {/* Header & Badges */}
-                <div className="space-y-1.5">
-                  <Badge variant={pkg.includesBreakfast ? 'brand' : 'neutral'} size="sm">
-                    {pkg.includesBreakfast ? '90 lượt • Cả 3 ca (Kèm sáng)' : '60 lượt • Trưa & Tối'}
-                  </Badge>
-                  <h3 className="font-semibold text-foreground text-base tracking-tight leading-snug">
+                <div>
+                  <h3 className="font-semibold text-slate-900 text-sm leading-snug">
                     {pkg.name}
                   </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {totalCredits} suất • {duration} ngày
+                    {pkg.includesBreakfast ? ' • Kèm sáng' : ''}
+                  </p>
                 </div>
 
                 {pkg.description && (
-                  <p className="text-xs text-muted leading-relaxed line-clamp-2">
+                  <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">
                     {pkg.description}
                   </p>
                 )}
-
-                {/* Price block */}
-                <div className="p-3.5 rounded-xl bg-surface-subtle border border-border space-y-2">
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-xs text-muted font-medium">Giá trọn gói</span>
-                    <span className="font-numeric text-xl font-bold text-foreground">
-                      {formatVND(priceNum)}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/60 text-xs">
-                    <div className="flex items-center gap-1.5 text-muted">
-                      <Calendar className="w-3.5 h-3.5 shrink-0" />
-                      <span>{pkg.durationDays || 30} ngày</span>
-                    </div>
-                    <div className="flex items-center justify-end gap-1 text-muted text-right">
-                      <Utensils className="w-3.5 h-3.5 shrink-0" />
-                      <span className="font-numeric font-medium text-foreground">{totalCredits}</span>
-                      <span>suất</span>
-                    </div>
-                  </div>
-                </div>
               </div>
 
-              {/* Bottom footer tag */}
-              <div className="pt-4 mt-2 border-t border-border flex items-center justify-between text-xs text-muted">
-                <span>Giá trung bình/suất</span>
-                <span className="font-numeric font-semibold text-foreground">
-                  ~{formatVND(perMealPrice)}
+              <div className="pt-3.5 mt-4 border-t border-slate-100 flex items-baseline justify-between gap-2">
+                <span className="font-numeric text-lg font-bold text-slate-900">
+                  {formatVND(priceNum)}
+                </span>
+                <span className="font-numeric text-xs text-slate-400">
+                  ~{formatVND(perMealPrice)}/suất
                 </span>
               </div>
-            </Card>
+            </div>
           );
         })}
       </div>
 
       {packages.length === 0 && (
-        <Card className="py-16 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-secondary text-muted mx-auto flex items-center justify-center mb-3">
-            <CreditCard className="w-6 h-6" />
+        <div className="bg-white rounded-2xl border border-slate-200/80 py-14 px-6 text-center">
+          <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-400 mx-auto flex items-center justify-center mb-3">
+            <CreditCard className="w-5 h-5" />
           </div>
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-sm font-medium text-slate-900">
             {loading ? 'Đang tải danh sách gói ăn...' : 'Chưa có gói ăn nào tại cơ sở này'}
           </p>
-          <p className="text-xs text-muted mt-1 max-w-sm mx-auto">
+          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
             {selectedCanteenId !== 'ALL'
-              ? `Cơ sở hiện tại chưa có gói ăn riêng. Tạo gói mới để học sinh cơ sở này có thể mua.`
-              : 'Tạo các gói suất ăn định kỳ để học sinh/CBNV có thể đăng ký trực tiếp.'}
+              ? 'Cơ sở hiện tại chưa có gói ăn riêng. Tạo gói mới để học sinh cơ sở này có thể mua.'
+              : 'Tạo các gói suất ăn định kỳ để học sinh có thể đăng ký trực tiếp.'}
           </p>
           {isSuperAdmin && !loading && (
             <div className="mt-4">
@@ -289,12 +267,17 @@ export const PackagesPage: React.FC = () => {
               </Button>
             </div>
           )}
-        </Card>
+        </div>
       )}
 
       {/* Modal Tạo/Sửa Gói */}
       {showModal && isSuperAdmin && (
-        <div className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-xs flex items-center justify-center p-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowModal(false);
+          }}
+          className="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4"
+        >
           <div className="bg-surface rounded-2xl border border-border shadow-modal max-w-md w-full p-6 space-y-5 animate-in fade-in-0 zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-border">
               <div>
@@ -321,18 +304,17 @@ export const PackagesPage: React.FC = () => {
                 <label className="block text-xs font-medium text-foreground mb-1.5">
                   Cơ sở Canteen áp dụng *
                 </label>
-                <select
+                <SelectDropdown
                   value={modalCanteenId}
-                  onChange={(e) => setModalCanteenId(e.target.value)}
-                  required
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border-strong bg-surface text-foreground text-xs focus:outline-none focus:border-foreground focus:ring-1 focus:ring-foreground transition-colors cursor-pointer"
-                >
-                  {canteens.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} {c.address ? `• ${c.address}` : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setModalCanteenId}
+                  placeholder="-- Chọn cơ sở Canteen --"
+                  buttonClassName="h-10 px-3.5"
+                  options={canteens.map((c) => ({
+                    value: c.id,
+                    label: c.name,
+                    description: c.address || undefined,
+                  }))}
+                />
                 <span className="text-[11px] text-muted block mt-1">
                   Mỗi gói ăn được phân định rõ ràng theo từng cơ sở, tránh thất thoát suất ăn.
                 </span>
@@ -439,7 +421,12 @@ export const PackagesPage: React.FC = () => {
 
       {/* Delete / Deactivate Package Confirmation Modal */}
       {pkgToDelete && (
-        <div className="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isDeleting) setPkgToDelete(null);
+          }}
+          className="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4"
+        >
           <div className="bg-surface rounded-2xl max-w-sm w-full p-5 border border-border shadow-modal space-y-4 text-xs">
             <div className="flex items-center justify-between pb-3 border-b border-border">
               <div className="flex items-center gap-2.5">

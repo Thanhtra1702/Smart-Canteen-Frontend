@@ -1,20 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Download,
-  UploadCloud,
-  CheckCircle2,
-  RefreshCw,
-  Search,
-  X,
-  Info,
-  Loader2,
-  AlertTriangle,
-} from 'lucide-react';
+  DownloadSimpleIcon as Download,
+  CloudArrowUpIcon as UploadCloud,
+  CheckCircleIcon as CheckCircle2,
+  MagnifyingGlassIcon as Search,
+  XIcon as X,
+  InfoIcon as Info,
+  SpinnerGapIcon as Loader2,
+  WarningIcon as AlertTriangle,
+  CaretUpDownIcon as ChevronsUpDown,
+} from '@phosphor-icons/react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/Button';
-import { Tabs } from '../components/ui/Tabs';
-import { Badge } from '../components/ui/Badge';
 import { useToast } from '../context/ToastContext';
 import { ImportStepper } from '../components/ui/ImportStepper';
 import { ExcelValidationTable } from '../components/ui/ExcelValidationTable';
@@ -30,6 +28,8 @@ export const InventoryPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [filterLowStock, setFilterLowStock] = useState(false);
+  const [sortField, setSortField] = useState<'name' | 'currentQty'>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   // History State
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -42,6 +42,7 @@ export const InventoryPage: React.FC = () => {
   const [txQty, setTxQty] = useState('');
   const [txPrice, setTxPrice] = useState('');
   const [txNote, setTxNote] = useState('');
+  const [txSubmitAttempted, setTxSubmitAttempted] = useState(false);
   const [isSubmittingTx, setIsSubmittingTx] = useState(false);
 
   // Excel Import State
@@ -64,7 +65,7 @@ export const InventoryPage: React.FC = () => {
           search: search.trim() || undefined,
         },
       });
-      setIngredients(res.data);
+      setIngredients(Array.isArray(res.data) ? res.data : res.data?.items || []);
     } catch (err) {
       console.error('Failed to load ingredients', err);
     } finally {
@@ -80,7 +81,7 @@ export const InventoryPage: React.FC = () => {
           canteenId: selectedCanteenId !== 'ALL' ? selectedCanteenId : undefined,
         },
       });
-      setTransactions(res.data);
+      setTransactions(Array.isArray(res.data) ? res.data : res.data?.items || []);
     } catch (err) {
       console.error('Failed to load transactions', err);
     } finally {
@@ -96,9 +97,77 @@ export const InventoryPage: React.FC = () => {
     }
   }, [activeTab, fetchIngredients, fetchTransactions]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchIngredients();
+  const toggleSort = (field: 'name' | 'currentQty') => {
+    if (sortField === field) {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  };
+
+  const displayedIngredients = useMemo(() => {
+    const factor = sortDir === 'asc' ? 1 : -1;
+    return [...ingredients].sort((a, b) => {
+      if (sortField === 'currentQty') {
+        return (Number(a.currentQty || 0) - Number(b.currentQty || 0)) * factor;
+      }
+      return String(a.name || '').localeCompare(String(b.name || ''), 'vi') * factor;
+    });
+  }, [ingredients, sortField, sortDir]);
+
+  const lowStockCount = useMemo(
+    () =>
+      ingredients.filter(
+        (ing) => Number(ing.currentQty || 0) <= Number(ing.minQty ?? ing.minThreshold ?? 0)
+      ).length,
+    [ingredients]
+  );
+
+  const getTxQuantityError = (
+    type: 'IMPORT' | 'EXPORT' | 'WASTE' | 'ADJUSTMENT',
+    rawQty: string,
+    currentStock: number
+  ): string | null => {
+    const trimmed = rawQty.trim();
+    if (!trimmed) {
+      if ((type === 'EXPORT' || type === 'WASTE') && currentStock <= 0) {
+        return 'Tồn kho hiện tại bằng 0, không thể xuất thêm';
+      }
+      return 'Vui lòng nhập số lượng';
+    }
+
+    const qty = Number(trimmed);
+    if (!Number.isFinite(qty)) {
+      return 'Số lượng không hợp lệ';
+    }
+
+    if (type === 'IMPORT') {
+      if (qty <= 0) {
+        return 'Nhập kho chỉ được cộng thêm, số lượng phải lớn hơn 0';
+      }
+      return null;
+    }
+
+    if (type === 'EXPORT' || type === 'WASTE') {
+      if (currentStock <= 0) {
+        return 'Tồn kho hiện tại bằng 0, không thể xuất thêm';
+      }
+      if (qty <= 0) {
+        return type === 'EXPORT'
+          ? 'Xuất kho chỉ được trừ đi, số lượng phải lớn hơn 0'
+          : 'Số lượng xuất hủy phải lớn hơn 0';
+      }
+      if (qty > currentStock) {
+        return `Số lượng xuất không được vượt quá tồn kho (${currentStock.toLocaleString('vi-VN')})`;
+      }
+      return null;
+    }
+
+    if (qty < 0) {
+      return 'Số lượng tồn kho thực tế không được âm';
+    }
+    return null;
   };
 
   const openTxModal = (ing: any, type: 'IMPORT' | 'EXPORT' | 'WASTE' | 'ADJUSTMENT') => {
@@ -106,6 +175,7 @@ export const InventoryPage: React.FC = () => {
     setTxType(type);
     setTxQty(type === 'ADJUSTMENT' ? ing.currentQty?.toString() || '0' : '');
     setTxPrice(ing.unitPrice?.toString() || '');
+    setTxSubmitAttempted(false);
     setTxNote(
       type === 'IMPORT'
         ? 'Nhập bổ sung kho'
@@ -118,9 +188,27 @@ export const InventoryPage: React.FC = () => {
     setShowTxModal(true);
   };
 
+  const currentStockNum = Number(selectedIngredient?.currentQty || 0);
+  const txQtyError = selectedIngredient
+    ? getTxQuantityError(txType, txQty, currentStockNum)
+    : null;
+  const showQtyError = Boolean(
+    txQtyError &&
+      (txSubmitAttempted ||
+        txQty.trim() !== '' ||
+        ((txType === 'EXPORT' || txType === 'WASTE') && currentStockNum <= 0))
+  );
+
   const handleSaveTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedIngredient || txQty === '') return;
+    if (!selectedIngredient) return;
+
+    setTxSubmitAttempted(true);
+
+    if (txQtyError) {
+      toast.error(txQtyError);
+      return;
+    }
 
     if ((txType === 'WASTE' || txType === 'ADJUSTMENT') && !txNote.trim()) {
       toast.error('Vui lòng nhập lý do bắt buộc cho phiếu hủy hoặc điều chỉnh kho');
@@ -187,7 +275,11 @@ export const InventoryPage: React.FC = () => {
       });
       setPreviewData(res.data);
       setImportStep(3);
-      toast.info(`Đã kiểm tra file: ${res.data.validRows?.length || 0} dòng hợp lệ, ${res.data.errors?.length || 0} dòng lỗi.`);
+      toast.info(
+        `Đã kiểm tra file: ${res.data.validRows?.length || 0} dòng hợp lệ, ${
+          res.data.errors?.length || 0
+        } dòng lỗi.`
+      );
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Lỗi đọc file Excel');
       setImportStep(2);
@@ -199,10 +291,12 @@ export const InventoryPage: React.FC = () => {
   const handleExportErrors = () => {
     if (!previewData?.errors?.length) return;
     const header = 'Dong,Nguyen_nhan_loi,Co_so,Ten_nguyen_lieu,Nhom,DVT,Ton_kho,Don_gia\n';
-    const rows = previewData.errors.map((e: any) => {
-      const d = e.rawData || {};
-      return `"${e.row}","${e.error.replace(/"/g, '""')}","${d.canteenInput || ''}","${d.name || ''}","${d.category || ''}","${d.unit || ''}","${d.currentQty || ''}","${d.unitPrice || ''}"`;
-    }).join('\n');
+    const rows = previewData.errors
+      .map((e: any) => {
+        const d = e.rawData || {};
+        return `"${e.row}","${e.error.replace(/"/g, '""')}","${d.canteenInput || ''}","${d.name || ''}","${d.category || ''}","${d.unit || ''}","${d.currentQty || ''}","${d.unitPrice || ''}"`;
+      })
+      .join('\n');
     const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -236,207 +330,282 @@ export const InventoryPage: React.FC = () => {
     }
   };
 
-  const tabItems = [
+  const getTxMeta = (type: string) => {
+    switch (type) {
+      case 'IMPORT':
+        return { label: 'Nhập hàng', dot: 'bg-emerald-500', sign: '+', textClass: 'text-emerald-700' };
+      case 'EXPORT':
+        return { label: 'Xuất bếp', dot: 'bg-[#0057b8]', sign: '-', textClass: 'text-slate-700' };
+      case 'ADJUSTMENT':
+        return { label: 'Kiểm kê', dot: 'bg-amber-500', sign: '=', textClass: 'text-slate-700' };
+      case 'WASTE':
+      default:
+        return { label: 'Xuất hủy', dot: 'bg-rose-500', sign: '-', textClass: 'text-rose-600' };
+    }
+  };
+
+  const tabs = [
     { id: 'stock' as const, label: 'Tồn kho nguyên liệu' },
     { id: 'history' as const, label: 'Sổ kho biến động' },
-    { id: 'import' as const, label: 'Nhập file Excel' },
+    { id: 'import' as const, label: 'Nhập Excel' },
   ];
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Tab Switcher & Quick Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <Tabs items={tabItems} activeTab={activeTab} onChange={(id) => setActiveTab(id)} />
+    <div className="space-y-4 max-w-6xl mx-auto">
+      {/* Unified Toolbar */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`h-7 px-3 rounded-lg text-xs transition-all cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                    : 'text-slate-500 hover:text-slate-800 font-medium'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
 
-        {activeTab === 'import' && (
-          <Button
-            variant="outline"
-            onClick={handleDownloadTemplate}
-            icon={Download}
-          >
-            <span>Tải file Excel mẫu tồn kho</span>
-          </Button>
-        )}
-      </div>
-
-      {/* View 1: Tồn Kho */}
-      {activeTab === 'stock' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3 bg-surface p-3 rounded-lg border border-border">
-            <form onSubmit={handleSearchSubmit} className="relative flex-1">
-              <Search className="size-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        {activeTab === 'stock' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 sm:w-56 sm:flex-none">
+              <Search className="size-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Tìm tên nguyên liệu..."
-                className="w-full pl-10 pr-3.5 h-10 bg-surface border border-border-strong rounded-xl text-sm text-foreground placeholder:text-muted focus:border-focus focus:ring-2 focus:ring-focus outline-hidden transition-colors"
+                className="w-full pl-9 pr-3 h-9 bg-white border border-slate-200/90 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:border-[#0057b8] focus:ring-1 focus:ring-[#0057b8] outline-hidden transition-colors"
               />
-            </form>
+            </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setFilterLowStock(!filterLowStock)}
-                className={`h-10 px-3.5 rounded-xl text-xs font-medium transition-colors cursor-pointer outline-hidden border ${
-                  filterLowStock
-                    ? 'bg-rose-50 border-rose-200 text-rose-700 font-semibold'
-                    : 'bg-surface border-border-strong text-muted hover:text-foreground hover:bg-button-hover'
+            <button
+              type="button"
+              onClick={() => setFilterLowStock((prev) => !prev)}
+              className={`h-9 px-3 rounded-xl text-xs font-medium border transition-colors cursor-pointer inline-flex items-center gap-2 ${
+                filterLowStock
+                  ? 'bg-rose-50 border-rose-200 text-rose-700'
+                  : 'bg-white border-slate-200/90 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <span
+                className={`size-1.5 rounded-full ${
+                  lowStockCount > 0 ? 'bg-rose-500' : 'bg-emerald-500'
                 }`}
-              >
-                Chỉ hiện sắp hết
-              </button>
-              <button
-                onClick={fetchIngredients}
-                disabled={loading}
-                className="size-10 rounded-xl border border-border-strong bg-surface hover:bg-button-hover text-muted hover:text-foreground transition-colors cursor-pointer flex items-center justify-center outline-hidden disabled:opacity-50"
-                title="Làm mới"
-              >
-                <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
+              />
+              <span>Sắp hết{lowStockCount > 0 ? ` (${lowStockCount})` : ''}</span>
+            </button>
           </div>
+        )}
 
-          <div className="bg-surface rounded-lg border border-border overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-surface text-muted uppercase text-[11px] font-medium border-b border-border">
-                  <tr>
-                    <th className="px-5 py-3">Nguyên liệu</th>
-                    <th className="px-5 py-3">Cơ sở</th>
-                    <th className="px-5 py-3 text-right">Tồn kho hiện tại</th>
-                    <th className="px-5 py-3 text-right">Định mức an toàn</th>
-                    <th className="px-5 py-3 text-right">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {ingredients.map((ing) => {
-                    const isLow = Number(ing.currentQty) <= Number(ing.minQty);
-                    return (
-                      <tr key={ing.id} className="hover:bg-surface-hover transition-colors">
-                        <td className="px-5 py-3.5 font-medium text-foreground">
-                          <div>{ing.name}</div>
-                          <div className="text-[11px] text-muted">{ing.category}</div>
-                        </td>
-                        <td className="px-5 py-3.5 text-muted">{ing.canteen?.name || 'Toàn chuỗi'}</td>
-                        <td
-                          className={`px-5 py-3.5 text-right font-semibold tabular-nums font-mono ${
-                            isLow ? 'text-rose-700' : 'text-foreground'
-                          }`}
-                        >
-                          {Number(ing.currentQty).toLocaleString()} {ing.unit}
-                        </td>
-                        <td className="px-5 py-3.5 text-right text-muted tabular-nums font-mono">
-                          {Number(ing.minQty).toLocaleString()} {ing.unit}
-                        </td>
-                        <td className="px-5 py-3.5 text-right space-x-1 whitespace-nowrap">
-                          <button
-                            onClick={() => openTxModal(ing, 'IMPORT')}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-foreground hover:bg-secondary transition-colors cursor-pointer outline-hidden"
-                          >
-                            Nhập
-                          </button>
-                          <button
-                            onClick={() => openTxModal(ing, 'EXPORT')}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-foreground hover:bg-secondary transition-colors cursor-pointer outline-hidden"
-                          >
-                            Xuất
-                          </button>
-                          <button
-                            onClick={() => openTxModal(ing, 'ADJUSTMENT')}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-foreground hover:bg-secondary transition-colors cursor-pointer outline-hidden"
-                          >
-                            Kiểm kê
-                          </button>
-                          <button
-                            onClick={() => openTxModal(ing, 'WASTE')}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted hover:text-rose-700 hover:bg-rose-500/10 transition-colors cursor-pointer outline-hidden"
-                          >
-                            Hủy
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+        {activeTab === 'import' && (
+          <Button variant="outline" size="sm" onClick={handleDownloadTemplate} icon={Download}>
+            Tải file mẫu .xlsx
+          </Button>
+        )}
+      </div>
 
-            {ingredients.length === 0 && (
-              <div className="py-12 text-center text-xs text-muted">
-                {loading ? 'Đang tải danh mục kho...' : 'Không có nguyên liệu nào.'}
+      {/* VIEW 1: TỒN KHO (FLOATING ROW-CARDS) */}
+      {activeTab === 'stock' && (
+        <div className="space-y-3">
+          <div className="overflow-x-auto pb-1">
+            <div className="min-w-[720px] space-y-2">
+              <div className="grid grid-cols-[minmax(200px,1.4fr)_minmax(160px,1.1fr)_120px_110px_210px] items-center gap-3 px-4 py-1 text-xs font-medium text-slate-400">
+                <button
+                  type="button"
+                  onClick={() => toggleSort('name')}
+                  className="inline-flex items-center gap-1 hover:text-slate-700 transition-colors cursor-pointer text-left"
+                >
+                  <span>Nguyên liệu</span>
+                  <ChevronsUpDown className="size-3 text-slate-300" />
+                </button>
+                <span>Cơ sở</span>
+                <button
+                  type="button"
+                  onClick={() => toggleSort('currentQty')}
+                  className="inline-flex items-center justify-end gap-1 hover:text-slate-700 transition-colors cursor-pointer text-right"
+                >
+                  <span>Tồn kho</span>
+                  <ChevronsUpDown className="size-3 text-slate-300" />
+                </button>
+                <span className="text-right">Định mức</span>
+                <span className="text-right">Thao tác</span>
               </div>
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* View 2: Sổ Kho */}
-      {activeTab === 'history' && (
-        <div className="bg-surface rounded-lg border border-border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-surface text-muted uppercase text-[11px] font-medium border-b border-border">
-                <tr>
-                  <th className="px-5 py-3">Thời gian</th>
-                  <th className="px-5 py-3">Cơ sở</th>
-                  <th className="px-5 py-3">Nguyên liệu</th>
-                  <th className="px-5 py-3">Loại phiếu</th>
-                  <th className="px-5 py-3 text-right">Số lượng</th>
-                  <th className="px-5 py-3">Ghi chú</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {transactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-surface-hover transition-colors">
-                    <td className="px-5 py-3.5 text-muted font-mono text-[11px]">
-                      {new Date(tx.createdAt).toLocaleString('vi-VN')}
-                    </td>
-                    <td className="px-5 py-3.5 text-foreground">{tx.ingredient?.canteen?.name || '—'}</td>
-                    <td className="px-5 py-3.5 font-medium text-foreground">{tx.ingredient?.name}</td>
-                    <td className="px-5 py-3.5">
-                      <Badge
-                        variant={
-                          tx.type === 'IMPORT'
-                            ? 'success'
-                            : tx.type === 'EXPORT'
-                            ? 'brand'
-                            : tx.type === 'ADJUSTMENT'
-                            ? 'warning'
-                            : 'error'
-                        }
+              {displayedIngredients.map((ing) => {
+                const minQty = Number(ing.minQty ?? ing.minThreshold ?? 0);
+                const isLow = Number(ing.currentQty || 0) <= minQty;
+
+                return (
+                  <div
+                    key={ing.id}
+                    className="bg-white rounded-xl border border-slate-200/75 hover:border-[#0057b8] hover:shadow-xs px-4 py-3 grid grid-cols-[minmax(200px,1.4fr)_minmax(160px,1.1fr)_120px_110px_210px] items-center gap-3 transition-all"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`size-1.5 rounded-full shrink-0 ${
+                            isLow ? 'bg-rose-500' : 'bg-emerald-500'
+                          }`}
+                        />
+                        <span className="text-xs font-medium text-slate-800 truncate" title={ing.name}>
+                          {ing.name}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 truncate mt-0.5 pl-3.5">
+                        {ing.category || 'Nguyên liệu'}
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-slate-500 truncate" title={ing.canteen?.name || ''}>
+                      {ing.canteen?.name || 'Toàn chuỗi'}
+                    </div>
+
+                    <div
+                      className={`text-right font-mono text-xs font-medium tabular-nums ${
+                        isLow ? 'text-rose-600' : 'text-slate-800'
+                      }`}
+                    >
+                      {Number(ing.currentQty || 0).toLocaleString('vi-VN')}{' '}
+                      <span className="font-sans text-[11px] text-slate-400">{ing.unit}</span>
+                    </div>
+
+                    <div className="text-right font-mono text-xs text-slate-400 tabular-nums">
+                      {minQty.toLocaleString('vi-VN')}{' '}
+                      <span className="font-sans text-[11px]">{ing.unit}</span>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openTxModal(ing, 'IMPORT')}
+                        className="h-7 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs text-slate-700 transition-colors cursor-pointer"
                       >
-                        {tx.type === 'IMPORT'
-                          ? 'Nhập hàng'
-                          : tx.type === 'EXPORT'
-                          ? 'Xuất bếp'
-                          : tx.type === 'ADJUSTMENT'
-                          ? 'Điều chỉnh'
-                          : 'Xuất hủy'}
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-semibold text-foreground font-mono tabular-nums">
-                      {tx.type === 'IMPORT' ? '+' : tx.type === 'EXPORT' || tx.type === 'WASTE' ? '-' : '='}{tx.quantity} {tx.ingredient?.unit}
-                    </td>
-                    <td className="px-5 py-3.5 text-muted max-w-xs truncate">{tx.note || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        Nhập
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openTxModal(ing, 'EXPORT')}
+                        className="h-7 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs text-slate-700 transition-colors cursor-pointer"
+                      >
+                        Xuất
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openTxModal(ing, 'ADJUSTMENT')}
+                        className="h-7 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs text-slate-700 transition-colors cursor-pointer"
+                      >
+                        Kiểm
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openTxModal(ing, 'WASTE')}
+                        className="h-7 px-2.5 rounded-lg text-xs text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                      >
+                        Hủy
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {displayedIngredients.length === 0 && (
+                <div className="bg-white rounded-xl border border-slate-200/75 py-12 text-center text-xs text-slate-400">
+                  {loading ? 'Đang tải danh mục kho...' : 'Không có nguyên liệu nào phù hợp.'}
+                </div>
+              )}
+            </div>
           </div>
 
-          {transactions.length === 0 && (
-            <div className="py-12 text-center text-xs text-muted">
-              {txLoading ? 'Đang tải dữ liệu biến động...' : 'Chưa có biến động kho nào.'}
-            </div>
-          )}
+          <div className="text-xs text-slate-400">
+            {displayedIngredients.length} nguyên liệu
+          </div>
         </div>
       )}
 
-      {/* View 3: Nhập Excel */}
+      {/* VIEW 2: SỔ KHO BIẾN ĐỘNG (FLOATING ROW-CARDS) */}
+      {activeTab === 'history' && (
+        <div className="space-y-3">
+          <div className="overflow-x-auto pb-1">
+            <div className="min-w-[680px] space-y-2">
+              <div className="grid grid-cols-[150px_minmax(170px,1.2fr)_110px_110px_minmax(170px,1.2fr)] items-center gap-3 px-4 py-1 text-xs font-medium text-slate-400">
+                <span>Thời gian</span>
+                <span>Nguyên liệu</span>
+                <span>Loại phiếu</span>
+                <span className="text-right">Số lượng</span>
+                <span>Ghi chú</span>
+              </div>
+
+              {transactions.map((tx) => {
+                const meta = getTxMeta(tx.type);
+                const created = new Date(tx.createdAt);
+                const timeStr = created.toLocaleTimeString('vi-VN', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+                const dateStr = created.toLocaleDateString('vi-VN');
+
+                return (
+                  <div
+                    key={tx.id}
+                    className="bg-white rounded-xl border border-slate-200/75 hover:border-[#0057b8] hover:shadow-xs px-4 py-3 grid grid-cols-[150px_minmax(170px,1.2fr)_110px_110px_minmax(170px,1.2fr)] items-center gap-3 transition-all"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-mono tabular-nums flex items-center gap-1.5">
+                        <span className="text-slate-700">{timeStr}</span>
+                        <span className="text-slate-400">{dateStr}</span>
+                      </div>
+                      {(tx.actor?.fullName || tx.ingredient?.canteen?.name) && (
+                        <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                          {tx.actor?.fullName || tx.ingredient?.canteen?.name}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-xs font-medium text-slate-800 truncate">
+                      {tx.ingredient?.name || 'Nguyên liệu'}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className={`size-1.5 rounded-full shrink-0 ${meta.dot}`} />
+                      <span className="text-xs text-slate-700">{meta.label}</span>
+                    </div>
+
+                    <div className={`text-right font-mono text-xs font-medium tabular-nums ${meta.textClass}`}>
+                      {meta.sign}
+                      {tx.quantity} {tx.ingredient?.unit || ''}
+                    </div>
+
+                    <div className="text-xs text-slate-500 truncate" title={tx.note || ''}>
+                      {tx.note || '—'}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {transactions.length === 0 && (
+                <div className="bg-white rounded-xl border border-slate-200/75 py-12 text-center text-xs text-slate-400">
+                  {txLoading ? 'Đang tải dữ liệu biến động...' : 'Chưa có biến động kho nào.'}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="text-xs text-slate-400">{transactions.length} phiếu kho</div>
+        </div>
+      )}
+
+      {/* VIEW 3: NHẬP EXCEL */}
       {activeTab === 'import' && (
-        <div className="space-y-6 max-w-4xl mx-auto">
-          {/* 1. Workflow Stepper 4 bước */}
+        <div className="space-y-5 max-w-4xl mx-auto">
           <ImportStepper
             currentStep={importStep}
             onStepClick={(step) => {
@@ -444,16 +613,12 @@ export const InventoryPage: React.FC = () => {
             }}
           />
 
-          {/* 2. Step 1: Hướng dẫn & Tải file mẫu */}
           {importStep <= 2 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 rounded-lg bg-surface border border-border shadow-2xs space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                    <span className="size-5 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">
-                      1
-                    </span>
-                    Tải file mẫu kiểm kê kho
+              <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-xs text-slate-800">
+                    1. Tải file mẫu kiểm kê kho
                   </span>
                   <Button
                     variant="outline"
@@ -464,65 +629,62 @@ export const InventoryPage: React.FC = () => {
                     Tải mẫu .xlsx
                   </Button>
                 </div>
-                <p className="text-[11px] text-muted leading-relaxed">
-                  File mẫu chuẩn gồm <strong>Sheet 1: Danh mục & Tồn kho</strong> và <strong>Sheet 2: Bảng tra cứu cơ sở & ĐVT</strong>. Hỗ trợ dropdown tự động 500 dòng giúp chống sai chính tả.
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Gồm Sheet Danh mục &amp; Tồn kho và Sheet Tra cứu cơ sở, đơn vị tính để nhập đồng loạt nhanh chóng.
                 </p>
               </div>
 
-              <div className="p-4 rounded-lg bg-surface border border-border shadow-2xs space-y-2">
-                <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                  <span className="size-5 rounded-full bg-primary/10 text-primary text-[11px] font-bold flex items-center justify-center">
-                    2
-                  </span>
-                  Kéo thả file kiểm kê tồn kho
+              <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
+                <div className="font-semibold text-xs text-slate-800">
+                  2. Tải lên file đã cập nhật
                 </div>
-                <p className="text-[11px] text-muted leading-relaxed">
-                  Tên nguyên liệu nên khớp với công thức BOM để hệ thống tự động trừ kho và cảnh báo thiếu hụt cho các ca nấu tiếp theo.
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Tên nguyên liệu khớp với công thức BOM giúp hệ thống tự động trừ kho và cảnh báo thiếu hụt theo ca nấu.
                 </p>
               </div>
             </div>
           )}
 
-          {/* 3. Step 2: Upload Dropzone */}
           {importStep <= 2 && (
-            <div className="bg-surface p-8 rounded-lg border-2 border-dashed border-border-strong hover:border-primary/50 text-center relative flex flex-col items-center justify-center transition cursor-pointer shadow-2xs">
+            <div className="bg-white p-8 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#0057b8]/60 text-center relative flex flex-col items-center justify-center transition cursor-pointer shadow-2xs">
               <input
                 type="file"
                 accept=".xlsx, .xls"
                 onChange={handleInventoryFileChange}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
-              <div className="size-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-2.5">
+              <div className="size-11 rounded-xl bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center mb-2.5">
                 {isUploading ? (
-                  <Loader2 className="size-5 text-primary animate-spin" />
+                  <Loader2 className="size-5 text-[#0057b8] animate-spin" />
                 ) : (
                   <UploadCloud className="size-5" />
                 )}
               </div>
-              <div className="text-sm font-semibold text-foreground">
-                {isUploading ? 'Đang đọc và kiểm tra file Excel...' : 'Kéo thả hoặc nhấp để chọn file Excel tồn kho'}
+              <div className="text-sm font-semibold text-slate-900">
+                {isUploading
+                  ? 'Đang đọc và kiểm tra file Excel...'
+                  : 'Kéo thả hoặc nhấp để chọn file Excel tồn kho'}
               </div>
-              <p className="text-xs text-muted mt-0.5">
-                {isUploading ? 'Vui lòng chờ trong giây lát' : 'Chấp nhận định dạng chuẩn .xlsx hoặc .xls (tối đa 10MB)'}
+              <p className="text-xs text-slate-400 mt-0.5">
+                {isUploading ? 'Vui lòng chờ trong giây lát' : 'Hỗ trợ .xlsx hoặc .xls (tối đa 10MB)'}
               </p>
               {excelFile && (
-                <span className="text-xs font-numeric font-medium text-primary bg-primary/10 px-3 py-1 rounded-lg mt-3 border border-primary/20">
+                <span className="text-xs font-mono font-medium text-[#0057b8] bg-[#EFF6FF] px-3 py-1 rounded-lg mt-3">
                   {excelFile.name} ({(excelFile.size / 1024).toFixed(1)} KB)
                 </span>
               )}
             </div>
           )}
 
-          {/* 4. Step 3: Bảng đối soát tiền kiểm Pre-flight */}
           {importStep >= 3 && previewData && (
             <div className="space-y-4 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-bold text-foreground">
-                    Bảng đối soát kiểm kê tồn kho ({previewData.validCount} dòng hợp lệ)
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Bảng đối soát tồn kho ({previewData.validCount} dòng hợp lệ)
                   </h3>
-                  <p className="text-xs text-muted">
-                    Phân loại biến động tồn kho và kiểm tra lỗi trước khi lưu vào CSDL
+                  <p className="text-xs text-slate-400">
+                    Kiểm tra biến động tồn kho trước khi lưu
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -543,7 +705,7 @@ export const InventoryPage: React.FC = () => {
                     disabled={isCommitting || previewData.validCount === 0}
                     onClick={() => setShowCommitConfirmModal(true)}
                   >
-                    Tiến hành Lưu ({previewData.validCount})
+                    Lưu ({previewData.validCount})
                   </Button>
                 </div>
               </div>
@@ -558,26 +720,17 @@ export const InventoryPage: React.FC = () => {
             </div>
           )}
 
-          {/* 5. Import Result Notification */}
           {importResult && (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-emerald-800">
-                <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
+            <div className="p-4 bg-white border border-slate-200/80 rounded-2xl space-y-3 shadow-2xs">
+              <div className="flex items-center gap-2 text-xs font-medium text-emerald-700">
+                <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
                 <span>{importResult.message}</span>
               </div>
-              <div className="pt-2 flex items-center gap-2">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setActiveTab('stock')}
-                >
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button variant="primary" size="sm" onClick={() => setActiveTab('stock')}>
                   Xem danh mục kho
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setActiveTab('history')}
-                >
+                <Button variant="outline" size="sm" onClick={() => setActiveTab('history')}>
                   Kiểm tra Sổ kho
                 </Button>
                 <Button
@@ -588,22 +741,23 @@ export const InventoryPage: React.FC = () => {
                     setImportStep(1);
                   }}
                 >
-                  Tiếp tục nhập đợt mới
+                  Nhập đợt mới
                 </Button>
               </div>
             </div>
           )}
 
-          {/* 6. Modal xác nhận lưu 2 lớp */}
           {showCommitConfirmModal && previewData && (
             <ExcelCommitModal
               isOpen={showCommitConfirmModal}
               type="inventory"
               summary={{
                 total: previewData.validCount,
-                inserts: previewData.validRows?.filter((r: any) => r.status === 'INSERT').length || 0,
-                updates: previewData.validRows?.filter((r: any) => r.status === 'UPDATE').length || 0,
-                canteenName: previewData.validRows?.[0]?.canteenName
+                inserts:
+                  previewData.validRows?.filter((r: any) => r.status === 'INSERT').length || 0,
+                updates:
+                  previewData.validRows?.filter((r: any) => r.status === 'UPDATE').length || 0,
+                canteenName: previewData.validRows?.[0]?.canteenName,
               }}
               isSubmitting={isCommitting}
               onClose={() => setShowCommitConfirmModal(false)}
@@ -615,53 +769,114 @@ export const InventoryPage: React.FC = () => {
 
       {/* Modal Phiếu Kho */}
       {showTxModal && selectedIngredient && (
-        <div className="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4">
-          <div className="bg-surface rounded-lg max-w-sm w-full p-5 border border-border shadow-modal space-y-3.5 text-xs">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <h3 className="font-semibold text-foreground text-sm">
-                {txType === 'IMPORT'
-                  ? 'Nhập kho nguyên liệu'
-                  : txType === 'EXPORT'
-                  ? 'Xuất ca bếp'
-                  : txType === 'ADJUSTMENT'
-                  ? 'Điều chỉnh tồn kho thực tế'
-                  : 'Xuất hủy hao hụt'}
-              </h3>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowTxModal(false);
+          }}
+          className="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 border border-slate-200/80 shadow-modal space-y-4 text-xs">
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-semibold text-slate-900 text-sm">
+                  {txType === 'IMPORT'
+                    ? 'Nhập kho nguyên liệu'
+                    : txType === 'EXPORT'
+                    ? 'Xuất ca bếp'
+                    : txType === 'ADJUSTMENT'
+                    ? 'Kiểm kê tồn kho thực tế'
+                    : 'Xuất hủy hao hụt'}
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {selectedIngredient.name} • Tồn hiện tại {selectedIngredient.currentQty}{' '}
+                  {selectedIngredient.unit}
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={() => setShowTxModal(false)}
-                className="p-1.5 text-muted hover:text-foreground rounded-lg hover:bg-secondary transition-colors cursor-pointer outline-hidden"
+                className="size-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer shrink-0"
+                aria-label="Đóng"
               >
-                <X className="size-4" />
+                <X className="size-3.5" />
               </button>
             </div>
 
-            <div className="text-muted leading-relaxed">
-              Nguyên liệu: <strong className="text-foreground">{selectedIngredient.name}</strong>
-              <br />
-              Tồn hiện tại: <span className="font-semibold text-foreground font-mono">{selectedIngredient.currentQty} {selectedIngredient.unit}</span>
-            </div>
-
-            <form onSubmit={handleSaveTransaction} className="space-y-3 pt-1">
-              <div className="space-y-1">
-                <label className="block font-medium text-foreground">
+            <form noValidate onSubmit={handleSaveTransaction} className="space-y-3.5">
+              <div className="space-y-1.5">
+                <label className="block font-medium text-slate-700">
                   {txType === 'ADJUSTMENT'
                     ? `Số lượng tồn thực tế (${selectedIngredient.unit}) *`
-                    : `Số lượng (${selectedIngredient.unit}) *`}
+                    : `Số lượng ${txType === 'IMPORT' ? 'nhập thêm' : 'xuất đi'} (${selectedIngredient.unit}) *`}
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  autoFocus
-                  value={txQty}
-                  onChange={(e) => setTxQty(e.target.value)}
-                  className="w-full h-10 px-3.5 bg-surface border border-border-strong rounded-xl text-sm font-mono text-foreground focus:border-focus focus:ring-2 focus:ring-focus outline-hidden"
-                />
+                <div className="relative">
+                  {txType !== 'ADJUSTMENT' && (
+                    <span
+                      className={`absolute left-3 top-1/2 -translate-y-1/2 font-mono text-xs font-semibold pointer-events-none ${
+                        txType === 'IMPORT' ? 'text-emerald-600' : 'text-rose-600'
+                      }`}
+                    >
+                      {txType === 'IMPORT' ? '+' : '-'}
+                    </span>
+                  )}
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={txType === 'ADJUSTMENT' ? '0' : '0.01'}
+                    max={
+                      txType === 'EXPORT' || txType === 'WASTE'
+                        ? String(Math.max(0, currentStockNum))
+                        : undefined
+                    }
+                    required
+                    autoFocus
+                    value={txQty}
+                    onKeyDown={(e) => {
+                      if (['-', '+', 'e', 'E'].includes(e.key)) {
+                        e.preventDefault();
+                      }
+                    }}
+                    onChange={(e) => setTxQty(e.target.value)}
+                    placeholder={txType === 'ADJUSTMENT' ? '0' : 'Nhập số lớn hơn 0...'}
+                    className={`w-full h-9 ${
+                      txType !== 'ADJUSTMENT' ? 'pl-7 pr-3' : 'px-3'
+                    } bg-white border rounded-xl text-xs font-mono text-slate-800 outline-hidden transition-colors ${
+                      showQtyError
+                        ? 'border-rose-400 focus:border-rose-500'
+                        : 'border-slate-200 focus:border-[#0057b8]'
+                    }`}
+                  />
+                </div>
+
+                {showQtyError ? (
+                  <p className="text-[11px] text-rose-600 font-medium">{txQtyError}</p>
+                ) : (
+                  txQty.trim() !== '' &&
+                  !txQtyError &&
+                  txType !== 'ADJUSTMENT' && (
+                    <p className="text-[11px] text-slate-500 flex items-center justify-between">
+                      <span>Tồn sau giao dịch</span>
+                      <span
+                        className={`font-mono font-semibold ${
+                          txType === 'IMPORT' ? 'text-emerald-700' : 'text-[#0057b8]'
+                        }`}
+                      >
+                        {Number(
+                          (txType === 'IMPORT'
+                            ? currentStockNum + Number(txQty)
+                            : Math.max(0, currentStockNum - Number(txQty))
+                          ).toFixed(2)
+                        ).toLocaleString('vi-VN')}{' '}
+                        {selectedIngredient.unit}
+                      </span>
+                    </p>
+                  )
+                )}
               </div>
 
               <div className="space-y-1">
-                <label className="block font-medium text-foreground">
-                  Ghi chú {txType === 'WASTE' || txType === 'ADJUSTMENT' ? '(Bắt buộc lý do) *' : ''}
+                <label className="block font-medium text-slate-700">
+                  Ghi chú {txType === 'WASTE' || txType === 'ADJUSTMENT' ? '(Bắt buộc) *' : ''}
                 </label>
                 <input
                   type="text"
@@ -670,17 +885,18 @@ export const InventoryPage: React.FC = () => {
                   onChange={(e) => setTxNote(e.target.value)}
                   placeholder={
                     txType === 'WASTE' || txType === 'ADJUSTMENT'
-                      ? 'Nhập lý do bắt buộc...'
+                      ? 'Nhập lý do...'
                       : 'Ghi chú thêm...'
                   }
-                  className="w-full h-10 px-3.5 bg-surface border border-border-strong rounded-xl text-sm text-foreground focus:border-focus focus:ring-2 focus:ring-focus outline-hidden"
+                  className="w-full h-9 px-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:border-[#0057b8] outline-hidden"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <Button
                   type="button"
                   variant="outline"
+                  size="sm"
                   onClick={() => setShowTxModal(false)}
                 >
                   Hủy
@@ -688,6 +904,8 @@ export const InventoryPage: React.FC = () => {
                 <Button
                   type="submit"
                   variant="primary"
+                  size="sm"
+                  disabled={showQtyError}
                   isLoading={isSubmittingTx}
                 >
                   Lưu phiếu
@@ -698,74 +916,79 @@ export const InventoryPage: React.FC = () => {
         </div>
       )}
 
-      {/* 2-Step Confirmation Modal for Excel Inventory Import */}
+      {/* Confirmation Modal for Excel Import */}
       {showCommitConfirmModal && previewData && (
-        <div className="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4">
-          <div className="bg-surface rounded-lg max-w-md w-full p-5 border border-border shadow-modal space-y-4 text-xs">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isCommitting) setShowCommitConfirmModal(false);
+          }}
+          className="fixed inset-0 modal-backdrop z-50 flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 border border-slate-200/80 shadow-modal space-y-4 text-xs">
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-slate-100 rounded-xl text-slate-700 border border-slate-200">
-                  <AlertTriangle className="size-5" />
+                <div className="size-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="size-4.5" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-foreground text-sm">
-                    Xác nhận cập nhật tồn kho (Bước 2/2)
+                  <h3 className="font-semibold text-slate-900 text-sm">
+                    Xác nhận cập nhật tồn kho
                   </h3>
-                  <p className="text-[11px] text-muted">
-                    Kiểm tra và xác nhận trước khi lưu vào hệ thống
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Kiểm tra lại trước khi lưu vào hệ thống
                   </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setShowCommitConfirmModal(false)}
                 disabled={isCommitting}
-                className="p-1.5 text-muted hover:text-foreground rounded-lg hover:bg-secondary transition-colors cursor-pointer outline-hidden"
+                className="size-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer"
               >
-                <X className="size-4" />
+                <X className="size-3.5" />
               </button>
             </div>
 
-            <div className="bg-surface-subtle p-3 rounded-xl border border-border space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-muted">Tổng số nguyên liệu hợp lệ:</span>
-                <span className="font-mono font-bold text-foreground">
+            <div className="rounded-xl border border-slate-200/80 divide-y divide-slate-100 bg-slate-50/40">
+              <div className="px-3.5 py-2.5 flex items-center justify-between gap-3">
+                <span className="text-slate-500">Số nguyên liệu hợp lệ</span>
+                <span className="font-mono font-semibold text-slate-800">
                   {previewData.validRows?.length || previewData.validCount || 0} dòng
                 </span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted">Tên file Excel:</span>
-                <span className="font-medium text-foreground truncate max-w-[200px]">
+              <div className="px-3.5 py-2.5 flex items-center justify-between gap-3">
+                <span className="text-slate-500">File Excel</span>
+                <span className="font-medium text-slate-800 truncate max-w-[200px]">
                   {excelFile?.name || 'File tồn kho'}
                 </span>
               </div>
             </div>
 
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 space-y-1">
-              <p className="font-semibold text-xs flex items-center gap-1.5">
-                <Info className="size-3.5 text-slate-600 shrink-0" />
-                Cảnh báo tác động hệ thống
-              </p>
-              <p className="text-[11px] text-slate-600 leading-relaxed">
-                Hành động này sẽ cập nhật số lượng tồn kho đầu kỳ và định mức tối thiểu của các nguyên liệu trong file Excel. Vui lòng đảm bảo các số liệu là chính xác.
+            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-slate-600 flex items-start gap-2">
+              <Info className="size-4 text-slate-400 shrink-0 mt-0.5" />
+              <p className="text-[11px] leading-relaxed">
+                Hành động này sẽ cập nhật số lượng tồn kho và định mức tối thiểu của các nguyên liệu trong file.
               </p>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 disabled={isCommitting}
                 onClick={() => setShowCommitConfirmModal(false)}
               >
-                Hủy bỏ
+                Hủy
               </Button>
               <Button
                 type="button"
                 variant="primary"
+                size="sm"
                 isLoading={isCommitting}
                 onClick={handleCommitInventory}
               >
-                Xác nhận lưu vào hệ thống
+                Xác nhận lưu
               </Button>
             </div>
           </div>

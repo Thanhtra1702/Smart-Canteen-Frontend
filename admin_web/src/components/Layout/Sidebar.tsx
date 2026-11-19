@@ -1,23 +1,23 @@
 import React from 'react';
 import {
-  LayoutDashboard,
-  Building2,
-  UtensilsCrossed,
-  Boxes,
-  Wallet,
-  Users,
-  MessageSquareQuote,
-  LogOut,
-  ChefHat,
-  Package,
-  Tv,
-  X,
-  ShieldCheck,
-  Lock,
-  Settings,
-} from 'lucide-react';
+  SquaresFourIcon as LayoutDashboard,
+  BuildingsIcon as Building2,
+  ForkKnifeIcon as UtensilsCrossed,
+  CubeIcon as Boxes,
+  WalletIcon as Wallet,
+  UsersIcon as Users,
+  ChatCircleDotsIcon as MessageSquareQuote,
+  SignOutIcon as LogOut,
+  ChefHatIcon as ChefHat,
+  PackageIcon as Package,
+  XIcon as X,
+  ShieldCheckIcon as ShieldCheck,
+  LockIcon as Lock,
+  SidebarSimpleIcon as SidebarSimple,
+  UserIcon as User,
+} from '@phosphor-icons/react';
 import { useAuth } from '../../context/AuthContext';
-import { useBrand } from '../../context/BrandContext';
+import logoImg from '../../assets/logo.png';
 
 export type TabType =
   | 'dashboard'
@@ -38,6 +38,8 @@ interface SidebarProps {
   lowStockCount?: number;
   isOpen?: boolean;
   onClose?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 interface NavSection {
@@ -45,7 +47,7 @@ interface NavSection {
   items: {
     id: TabType;
     label: string;
-    icon: React.ComponentType<{ className?: string }>;
+    icon: React.ComponentType<{ className?: string; weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone' }>;
     badge?: number;
     roles?: string[];
     permission?: string;
@@ -58,9 +60,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   lowStockCount = 0,
   isOpen = false,
   onClose,
+  isCollapsed = false,
+  onToggleCollapse,
 }) => {
   const { user, logout, hasPermission } = useAuth();
-  const { brand, openBrandModal } = useBrand();
 
   const navSections: NavSection[] = [
     {
@@ -81,7 +84,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           badge: lowStockCount > 0 ? lowStockCount : undefined,
         },
         { id: 'forecast', label: 'Dự báo suất ăn', icon: ChefHat, permission: 'INVENTORY_MANAGEMENT' },
-        { id: 'serving', label: 'Màn hình quầy gắp', icon: Tv, permission: 'SERVING_OPERATION' },
       ],
     },
     {
@@ -108,48 +110,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <aside
-        className={`w-64 bg-surface text-foreground flex flex-col h-screen fixed left-0 top-0 border-r border-border z-40 select-none transition-transform duration-200 ${
+        className={`w-64 ${
+          isCollapsed ? 'lg:w-[76px]' : 'lg:w-64'
+        } bg-surface text-foreground flex flex-col h-screen fixed left-0 top-0 border-r border-border z-40 select-none transition-all duration-200 ${
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        {/* Brand Header */}
-        <div className="h-14 flex items-center justify-between px-3.5 border-b border-border bg-surface shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            {brand.logoUrl ? (
+        {/* Brand Header (Synced with Mino branding) */}
+        <div
+          className={`h-14 flex items-center ${
+            isCollapsed ? 'justify-between lg:justify-center px-3.5 lg:px-0' : 'justify-between px-3.5'
+          } border-b border-slate-200/80 bg-white shrink-0`}
+        >
+          <div className={`flex items-center gap-2 min-w-0 flex-1 ${isCollapsed ? 'lg:hidden' : ''}`}>
+            <div className="h-10 w-[132px] flex items-center justify-center shrink-0">
               <img
-                src={brand.logoUrl}
-                alt={brand.brandName}
-                className="size-8 rounded-lg object-contain bg-surface border border-border p-0.5 shrink-0 shadow-xs"
+                src={logoImg}
+                alt="Mino Smart Canteen"
+                className="w-full h-full object-contain scale-[1.28] mix-blend-multiply"
               />
-            ) : (
-              <div className="size-8 rounded-lg bg-primary text-white flex items-center justify-center shrink-0 shadow-xs">
-                <ChefHat className="size-4.5" />
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <span className="font-semibold text-foreground text-sm tracking-tight block truncate" title={brand.brandName}>
-                {brand.brandName}
-              </span>
-              <span className="text-[11px] text-muted block truncate font-normal" title={brand.brandSubtitle}>
-                {brand.brandSubtitle}
-              </span>
             </div>
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#EFF6FF] text-[#0057b8] shrink-0">
+              Admin
+            </span>
           </div>
-          <div className="flex items-center gap-0.5 shrink-0">
-            {(user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN') && (
+
+          <div className="flex items-center gap-1 shrink-0">
+            {onToggleCollapse && (
               <button
                 type="button"
-                onClick={openBrandModal}
-                title="Cấu hình thương hiệu & Logo"
-                className="p-1.5 text-muted hover:text-primary hover:bg-primary/5 rounded-lg transition-colors cursor-pointer"
+                onClick={onToggleCollapse}
+                title={isCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'}
+                aria-label={isCollapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'}
+                className={`hidden lg:inline-flex items-center justify-center rounded-xl transition-colors cursor-pointer ${
+                  isCollapsed
+                    ? 'size-9 text-[#0057b8] bg-[#EFF6FF]/80 hover:bg-[#EFF6FF]'
+                    : 'p-1.5 text-slate-400 hover:text-[#0057b8] hover:bg-[#EFF6FF]'
+                }`}
               >
-                <Settings className="size-4" />
+                <SidebarSimple weight={isCollapsed ? 'fill' : 'regular'} className="size-5" />
               </button>
             )}
             {onClose && (
               <button
+                type="button"
                 onClick={onClose}
-                className="lg:hidden p-1.5 text-muted hover:text-foreground rounded-lg hover:bg-slate-100 cursor-pointer"
+                className="lg:hidden p-1.5 text-muted hover:text-foreground rounded-xl hover:bg-slate-100 cursor-pointer shrink-0"
+                aria-label="Đóng thanh điều hướng"
               >
                 <X className="size-4" />
               </button>
@@ -167,10 +174,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             return (
               <div key={idx} className="space-y-1">
-                <div className="px-2.5 pb-1 pt-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-muted-light">
+                <div
+                  className={`px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-light ${
+                    isCollapsed ? 'lg:hidden' : ''
+                  }`}
+                >
                   {section.title}
                 </div>
-                <div className="space-y-0.5">
+                {isCollapsed && idx > 0 && (
+                  <div className="hidden lg:block h-px bg-slate-100 mx-2 my-1.5" />
+                )}
+                <div className="space-y-1">
                   {visibleItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = currentTab === item.id;
@@ -179,12 +193,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     return (
                       <button
                         key={item.id}
+                        type="button"
                         onClick={() => {
                           setCurrentTab(item.id);
                           onClose?.();
                         }}
-                        title={isLocked ? `Chưa được cấp quyền ${item.permission}` : item.label}
-                        className={`w-full flex h-8.5 cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-xs font-medium transition-all outline-hidden ${
+                        title={isLocked ? `${item.label} (Chưa cấp quyền)` : item.label}
+                        className={`relative w-full flex h-10 cursor-pointer items-center gap-3 rounded-xl px-3 text-[13px] font-medium transition-all outline-hidden ${
+                          isCollapsed ? 'lg:w-11 lg:h-11 lg:mx-auto lg:justify-center lg:px-0' : ''
+                        } ${
                           isActive
                             ? 'bg-primary/10 text-primary font-semibold border border-primary/20 shadow-2xs'
                             : isLocked
@@ -193,7 +210,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         }`}
                       >
                         <Icon
-                          className={`size-4 shrink-0 transition-colors ${
+                          weight={isActive ? 'fill' : 'regular'}
+                          className={`size-5 shrink-0 transition-colors ${
                             isActive
                               ? 'text-primary'
                               : isLocked
@@ -201,10 +219,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               : 'text-muted'
                           }`}
                         />
-                        <span className="flex-1 text-left truncate">{item.label}</span>
+                        <span className={`flex-1 text-left truncate ${isCollapsed ? 'lg:hidden' : ''}`}>
+                          {item.label}
+                        </span>
                         {isLocked ? (
                           <span
-                            className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 shrink-0 font-normal"
+                            className={`inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 shrink-0 font-normal ${
+                              isCollapsed ? 'lg:hidden' : ''
+                            }`}
                             title={`Cần quyền ${item.permission}`}
                           >
                             <Lock className="size-2.5" />
@@ -212,9 +234,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           </span>
                         ) : (
                           item.badge !== undefined && (
-                            <span className="px-1.5 py-0.2 rounded-full text-[10.5px] font-semibold tabular-nums border bg-rose-50 text-rose-700 border-rose-200 shrink-0">
-                              {item.badge}
-                            </span>
+                            <>
+                              <span
+                                className={`px-1.5 py-0.2 rounded-full text-[11px] font-semibold tabular-nums border bg-rose-50 text-rose-700 border-rose-200 shrink-0 ${
+                                  isCollapsed ? 'lg:hidden' : ''
+                                }`}
+                              >
+                                {item.badge}
+                              </span>
+                              {isCollapsed && (
+                                <span className="hidden lg:flex absolute top-1 right-1 min-w-4 h-4 px-1 items-center justify-center rounded-full text-[10px] font-bold tabular-nums bg-rose-500 text-white">
+                                  {item.badge}
+                                </span>
+                              )}
+                            </>
                           )
                         )}
                       </button>
@@ -228,26 +261,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Footer / User Profile & Logout */}
         <div className="p-3 border-t border-border bg-surface shrink-0">
-          <div className="flex items-center justify-between gap-2.5">
-            <div className="relative">
-              <div className="size-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-xs text-primary">
-                {user?.fullName?.charAt(0) || 'A'}
+          <div
+            className={`flex items-center justify-between gap-2.5 ${
+              isCollapsed ? 'lg:flex-col lg:justify-center lg:gap-2' : ''
+            }`}
+          >
+            <div
+              className="relative shrink-0"
+              title={user?.fullName || 'Quản trị viên'}
+            >
+              <div className="size-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                <User weight="fill" className="size-[18px]" />
               </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-foreground truncate">
+            <div className={`min-w-0 flex-1 ${isCollapsed ? 'lg:hidden' : ''}`}>
+              <p className="text-[13px] font-semibold text-foreground truncate">
                 {user?.fullName || 'Quản trị viên'}
               </p>
-              <p className="text-[11px] text-muted truncate">
+              <p className="text-xs text-muted truncate">
                 {user?.role === 'SUPER_ADMIN' ? 'Admin Tổng HQ' : 'Admin cơ sở'}
               </p>
             </div>
             <button
+              type="button"
               onClick={logout}
-              className="p-1.5 text-muted hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer outline-hidden"
+              className="p-2 text-muted hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer outline-hidden shrink-0"
               title="Đăng xuất khỏi hệ thống"
             >
-              <LogOut className="size-4" />
+              <LogOut className="size-[18px]" />
             </button>
           </div>
         </div>

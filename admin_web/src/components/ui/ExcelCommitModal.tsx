@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import {
-  ShieldAlert,
-  CheckCircle2,
-  AlertTriangle,
-  X,
-  PlusCircle,
-  RefreshCw,
-  Layers,
-  ArrowRight,
-} from 'lucide-react';
+  ShieldWarningIcon as ShieldAlert,
+  WarningIcon as AlertTriangle,
+  XIcon as X,
+  PlusCircleIcon as PlusCircle,
+  ArrowsClockwiseIcon as RefreshCw,
+  StackIcon as Layers,
+} from '@phosphor-icons/react';
 import { Button } from './Button';
 
 interface ExcelCommitModalProps {

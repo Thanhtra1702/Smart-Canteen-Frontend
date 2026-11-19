@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
 
 export interface User {
@@ -42,7 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const setSelectedCanteenId = (id: string) => {
+  const setSelectedCanteenId = useCallback((id: string) => {
     setSelectedCanteenIdState(id);
     if (typeof window !== 'undefined') {
       localStorage.setItem('selectedCanteenId', id);
@@ -58,7 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // ignore
       }
     }
-  };
+  }, []);
 
   const refreshUserProfile = async () => {
     if (!token) return;
@@ -111,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }).catch(() => {});
 
     setIsLoading(false);
-  }, []);
+  }, [setSelectedCanteenId]);
 
   const login = (newToken: string, newUser: User) => {
     localStorage.setItem('token', newToken);

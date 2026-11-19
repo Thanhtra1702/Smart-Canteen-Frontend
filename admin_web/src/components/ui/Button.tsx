@@ -1,5 +1,5 @@
 import React from 'react';
-import { Loader2 } from 'lucide-react';
+import { SpinnerGapIcon as Loader2 } from '@phosphor-icons/react';
 
 export type ButtonVariant = 'outline' | 'primary' | 'secondary' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon';
@@ -45,14 +45,14 @@ export const Button: React.FC<ButtonProps> = ({
   const getSizeClasses = () => {
     switch (size) {
       case 'sm':
-        return 'h-8 px-2.5 text-xs gap-1.5 rounded-lg';
+        return 'h-8 px-2.5 text-xs gap-1.5 rounded-xl';
       case 'lg':
         return 'h-10.5 px-4 text-sm gap-2 rounded-xl';
       case 'icon':
-        return 'size-9 p-0 rounded-lg justify-center';
+        return 'size-9 p-0 rounded-xl justify-center';
       case 'md':
       default:
-        return 'h-9 px-3.5 text-xs font-medium gap-1.5 rounded-lg';
+        return 'h-9 px-3.5 text-xs font-medium gap-1.5 rounded-xl';
     }
   };
 

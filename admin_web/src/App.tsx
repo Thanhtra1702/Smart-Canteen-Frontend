@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import { LockIcon as Lock } from '@phosphor-icons/react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AdminLayout } from './components/Layout/AdminLayout';
 import type { TabType } from './components/Layout/Sidebar';
 import { api } from './services/api';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
-import { BrandProvider, useBrand } from './context/BrandContext';
-import { BrandSettingsModal } from './components/BrandSettingsModal';
 
 // Route-level code splitting via React.lazy to reduce initial bundle size below 500 kB
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -190,8 +189,6 @@ const isLegacyLandingUrl = () => {
   );
 };
 
-import { Lock } from 'lucide-react';
-
 const TAB_PERMISSION_MAP: Partial<Record<TabType, { permission: string; name: string }>> = {
   canteens: { permission: 'CANTEEN_CONFIG', name: 'Cấu hình Cơ sở & Ca ăn' },
   menu: { permission: 'MENU_MANAGEMENT', name: 'Quản lý Thực đơn & Món ăn' },
@@ -205,7 +202,6 @@ const TAB_PERMISSION_MAP: Partial<Record<TabType, { permission: string; name: st
 
 const AppContent: React.FC = () => {
   const { user, token, isLoading, selectedCanteenId, hasPermission, logout } = useAuth();
-  const { brand } = useBrand();
   const [currentTab, setCurrentTabState] = useState<TabType>(resolveTabFromUrl);
   const [lowStockCount, setLowStockCount] = useState<number>(0);
 
@@ -230,12 +226,12 @@ const AppContent: React.FC = () => {
     };
   }, []);
 
-  // Dynamically update document title to reflect active tab and brand
+  // Dynamically update document title to reflect active tab
   useEffect(() => {
     if (typeof document !== 'undefined') {
-      document.title = `${getTabTitle(currentTab)} | ${brand.brandName || 'Smart Canteen HQ'}`;
+      document.title = `${getTabTitle(currentTab)} | Smart Canteen HQ`;
     }
-  }, [currentTab, brand.brandName]);
+  }, [currentTab]);
 
 
   // Role guard: Non-SUPER_ADMIN cannot access HQ-only tabs
@@ -304,7 +300,6 @@ const AppContent: React.FC = () => {
         setCurrentTab={setCurrentTab}
         title={getTabTitle(currentTab)}
         lowStockCount={lowStockCount}
-        onRefresh={fetchStockAlertCount}
       >
         {isTabUnauthorized ? (
           <div className="p-8 text-center bg-surface rounded-2xl border border-border space-y-4 max-w-lg mx-auto my-12 shadow-xs">
@@ -397,10 +392,7 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <ToastProvider>
-          <BrandProvider>
-            <AppContent />
-            <BrandSettingsModal />
-          </BrandProvider>
+          <AppContent />
         </ToastProvider>
       </AuthProvider>
     </ThemeProvider>

@@ -1,5 +1,10 @@
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import {
+  CheckCircleIcon as CheckCircle2,
+  WarningCircleIcon as AlertCircle,
+  InfoIcon as Info,
+  XIcon as X,
+} from '@phosphor-icons/react';
 
 interface ToastItem {
   id: string;

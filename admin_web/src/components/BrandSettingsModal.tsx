@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  X,
-  Upload,
-  Image as ImageIcon,
-  Building2,
-  RotateCcw,
-  ChefHat,
-  Check,
-  AlertCircle,
-  Link as LinkIcon,
-} from 'lucide-react';
+  XIcon as X,
+  UploadSimpleIcon as Upload,
+  BuildingsIcon as Building2,
+  ArrowCounterClockwiseIcon as RotateCcw,
+  ChefHatIcon as ChefHat,
+  CheckIcon as Check,
+  WarningCircleIcon as AlertCircle,
+  LinkIcon,
+} from '@phosphor-icons/react';
 import { useBrand, DEFAULT_BRAND } from '../context/BrandContext';
 import { useToast } from '../context/ToastContext';
 

@@ -1,36 +1,25 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Download,
-  UploadCloud,
-  CheckCircle2,
-  AlertCircle,
-  Layers,
-  ArrowRight,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  Building2,
-  Utensils,
-  Clock,
-  X,
-  Tv,
-  Search,
-  Sun,
-  Moon,
-  FileSpreadsheet,
-  LayoutGrid,
-  CalendarDays,
-  UtensilsCrossed,
-  Info,
-  CalendarRange,
-  ChevronDown,
-  Filter,
-} from 'lucide-react';
+  DownloadSimpleIcon as Download,
+  CloudArrowUpIcon as UploadCloud,
+  CheckCircleIcon as CheckCircle2,
+  ArrowRightIcon as ArrowRight,
+  CalendarIcon as Calendar,
+  CaretLeftIcon as ChevronLeft,
+  CaretRightIcon as ChevronRight,
+  XIcon as X,
+  MagnifyingGlassIcon as Search,
+  EyeIcon as Eye,
+  SpinnerGapIcon as Loader2,
+  CaretUpDownIcon as ChevronsUpDown,
+  SunIcon as Sun,
+  ForkKnifeIcon as Utensils,
+  MoonIcon as Moon,
+} from '@phosphor-icons/react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/Button';
-import { Badge } from '../components/ui/Badge';
-import { Card } from '../components/ui/Card';
+import { DatePickerButton } from '../components/ui/DatePickerButton';
 import { useToast } from '../context/ToastContext';
 import { ImportStepper } from '../components/ui/ImportStepper';
 import { ExcelValidationTable } from '../components/ui/ExcelValidationTable';
@@ -39,6 +28,43 @@ import { ExcelCommitModal } from '../components/ui/ExcelCommitModal';
 interface MenuImportPageProps {
   onNavigateTab?: (tab: any) => void;
 }
+
+const SHIFT_DEFINITIONS = [
+  {
+    type: 'BREAKFAST',
+    title: 'Ca Sáng',
+    time: '06:30 – 08:30',
+    dot: 'bg-amber-500',
+    iconBg: 'bg-amber-50 text-amber-600',
+  },
+  {
+    type: 'LUNCH',
+    title: 'Ca Trưa',
+    time: '11:00 – 13:00',
+    dot: 'bg-[#0057b8]',
+    iconBg: 'bg-[#EFF6FF] text-[#0057b8]',
+  },
+  {
+    type: 'DINNER',
+    title: 'Ca Tối',
+    time: '17:00 – 19:00',
+    dot: 'bg-indigo-500',
+    iconBg: 'bg-indigo-50 text-indigo-600',
+  },
+] as const;
+
+const renderShiftIcon = (type: string) => {
+  if (type === 'BREAKFAST') return <Sun className="size-4" />;
+  if (type === 'DINNER') return <Moon className="size-4" />;
+  return <Utensils className="size-4" />;
+};
+
+const formatYYYYMMDD = (d: Date) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab }) => {
   const { user, selectedCanteenId } = useAuth();
@@ -49,9 +75,7 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
   const [matrixShiftFilter, setMatrixShiftFilter] = useState<'ALL' | 'BREAKFAST' | 'LUNCH' | 'DINNER'>('ALL');
 
-  // ==========================================
-  // CANTEEN SELECTION STATE
-  // ==========================================
+  // Canteen Selection
   const [canteens, setCanteens] = useState<any[]>([]);
   const [activeCanteenId, setActiveCanteenId] = useState<string>('');
 
@@ -82,16 +106,7 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
     fetchCanteens();
   }, [user, isSuperAdmin, selectedCanteenId]);
 
-  // ==========================================
-  // WEEKLY MENU STATE & LOGIC
-  // ==========================================
-  const formatYYYYMMDD = (d: Date) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
+  // Weekly Menu State & Helpers
   const getMonday = (d: Date) => {
     const date = new Date(d);
     const day = date.getDay();
@@ -106,7 +121,6 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
   const [weeklyLoading, setWeeklyLoading] = useState(false);
   const [selectedDishModal, setSelectedDishModal] = useState<any | null>(null);
 
-  // 7 ngày trong tuần từ Thứ Hai đến Chủ Nhật
   const weekDays = useMemo(() => {
     const days: { date: Date; dateStr: string; dayLabel: string; shortLabel: string; isToday: boolean }[] = [];
     const dayLabels = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật'];
@@ -128,7 +142,6 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
     return days;
   }, [currentWeekMonday]);
 
-  // Ngày được chọn trong chế độ xem theo ngày
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
     const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
     const monday = getMonday(new Date());
@@ -141,14 +154,9 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
     return 0;
   });
 
-  // Tự động nhảy sang hôm nay khi đổi tuần (nếu tuần đó chứa hôm nay)
   useEffect(() => {
     const todayIdx = weekDays.findIndex((d) => d.isToday);
-    if (todayIdx !== -1) {
-      setSelectedDayIndex(todayIdx);
-    } else {
-      setSelectedDayIndex(0);
-    }
+    setSelectedDayIndex(todayIdx !== -1 ? todayIdx : 0);
   }, [weekDays]);
 
   const sundayDate = useMemo(() => {
@@ -161,18 +169,14 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
     if (!activeCanteenId && !isSuperAdmin) return;
     try {
       setWeeklyLoading(true);
-      const startDateStr = weekDays[0].dateStr;
-      const endDateStr = weekDays[6].dateStr;
-
       const res = await api.get('/menu', {
         params: {
           canteenId: activeCanteenId !== 'ALL' ? activeCanteenId : undefined,
-          startDate: startDateStr,
-          endDate: endDateStr,
+          startDate: weekDays[0].dateStr,
+          endDate: weekDays[6].dateStr,
         },
       });
-      const data = Array.isArray(res.data) ? res.data : [];
-      setWeeklyMenus(data);
+      setWeeklyMenus(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Lỗi tải thực đơn tuần', err);
       setWeeklyMenus([]);
@@ -203,52 +207,27 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
     setCurrentWeekMonday(getMonday(new Date()));
   };
 
-  const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.value) return;
-    const picked = new Date(e.target.value);
-    setCurrentWeekMonday(getMonday(picked));
+  const handleDatePick = (isoDate: string) => {
+    if (!isoDate) return;
+    const [y, m, d] = isoDate.split('-').map(Number);
+    setCurrentWeekMonday(getMonday(new Date(y, (m || 1) - 1, d || 1)));
   };
 
-  // Map menus theo ngày (YYYY-MM-DD) và ca (BREAKFAST, LUNCH, DINNER)
   const menusByDateAndMeal = useMemo(() => {
     const map = new Map<string, any>();
     weeklyMenus.forEach((m) => {
       const dStr = typeof m.date === 'string' ? m.date.slice(0, 10) : formatYYYYMMDD(new Date(m.date));
-      const key = `${dStr}_${m.mealType}`;
-      map.set(key, m);
+      map.set(`${dStr}_${m.mealType}`, m);
     });
     return map;
   }, [weeklyMenus]);
 
-  // Thống kê tuần
-  const weeklyStats = useMemo(() => {
-    const mealCount = weeklyMenus.length;
-    const dishSet = new Set<string>();
-    let totalBomIngredients = 0;
-
-    weeklyMenus.forEach((m) => {
-      m.items?.forEach((item: any) => {
-        if (item.dish) {
-          dishSet.add(item.dish.id);
-          totalBomIngredients += item.dish.recipes?.length || 0;
-        }
-      });
-    });
-
-    return {
-      mealCount,
-      uniqueDishes: dishSet.size,
-      totalBomIngredients,
-    };
-  }, [weeklyMenus]);
-
-  // ==========================================
-  // DISHES CATALOG STATE
-  // ==========================================
+  // Dishes Catalog State
   const [dishes, setDishes] = useState<any[]>([]);
   const [dishesLoading, setDishesLoading] = useState(false);
   const [dishSearch, setDishSearch] = useState('');
   const [dishCategoryFilter, setDishCategoryFilter] = useState<string>('ALL');
+  const [dishSortDir, setDishSortDir] = useState<'asc' | 'desc'>('asc');
 
   const fetchDishes = useCallback(async () => {
     try {
@@ -256,8 +235,7 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
       const res = await api.get('/menu/dishes', {
         params: { canteenId: activeCanteenId !== 'ALL' ? activeCanteenId : undefined },
       });
-      const data = Array.isArray(res.data) ? res.data : [];
-      setDishes(data);
+      setDishes(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Failed to load dishes', err);
     } finally {
@@ -271,23 +249,29 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
     }
   }, [activeTab, fetchDishes]);
 
-  const filteredDishes = useMemo(() => {
-    return dishes.filter((d) => {
-      const matchSearch =
-        !dishSearch.trim() || d.name?.toLowerCase().includes(dishSearch.trim().toLowerCase());
-      const matchCat =
-        dishCategoryFilter === 'ALL'
-          ? true
-          : dishCategoryFilter === 'FOOD'
-          ? d.category === 'MAIN' || d.category === 'SIDE'
-          : d.category === dishCategoryFilter;
-      return matchSearch && matchCat;
-    });
-  }, [dishes, dishSearch, dishCategoryFilter]);
+  const toggleDishNameSort = () => {
+    setDishSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+  };
 
-  // ==========================================
-  // EXCEL IMPORT STATE & LOGIC
-  // ==========================================
+  const filteredDishes = useMemo(() => {
+    const q = dishSearch.trim().toLowerCase();
+    const factor = dishSortDir === 'asc' ? 1 : -1;
+
+    return dishes
+      .filter((d) => {
+        const matchSearch = !q || d.name?.toLowerCase().includes(q);
+        const matchCat =
+          dishCategoryFilter === 'ALL'
+            ? true
+            : dishCategoryFilter === 'FOOD'
+            ? d.category === 'MAIN' || d.category === 'SIDE'
+            : d.category === dishCategoryFilter;
+        return matchSearch && matchCat;
+      })
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'vi') * factor);
+  }, [dishes, dishSearch, dishCategoryFilter, dishSortDir]);
+
+  // Excel Import State
   const [importStep, setImportStep] = useState<number>(1);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -310,7 +294,7 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
       document.body.appendChild(link);
       link.click();
       link.remove();
-      toast.success('Đã tải file Excel mẫu thực đơn kèm hướng dẫn thành công!');
+      toast.success('Đã tải file Excel mẫu thực đơn thành công!');
       setImportStep(2);
     } catch (err) {
       toast.error('Lỗi tải file mẫu: ' + err);
@@ -393,228 +377,81 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
     }
   };
 
-  const formatVND = (num: number) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num || 0);
+  const getCategoryMeta = (category?: string) => {
+    switch (category) {
+      case 'MAIN':
+        return { label: 'Món chính', dot: 'bg-[#0057b8]' };
+      case 'SIDE':
+        return { label: 'Món phụ', dot: 'bg-emerald-500' };
+      case 'SOUP':
+        return { label: 'Món canh', dot: 'bg-amber-500' };
+      case 'DRINK':
+        return { label: 'Đồ uống', dot: 'bg-cyan-500' };
+      case 'DESSERT':
+        return { label: 'Tráng miệng', dot: 'bg-purple-500' };
+      default:
+        return { label: category || 'Món ăn', dot: 'bg-slate-400' };
+    }
   };
 
-  const getMealTypeBadge = (mealType: string) => {
+  const getMealLabel = (mealType?: string) => {
     switch (mealType) {
       case 'BREAKFAST':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-            <Sun className="w-3 h-3 text-amber-500" />
-            Ca Sáng
-          </span>
-        );
+        return 'Ca Sáng';
       case 'LUNCH':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-[#0057b8] border border-blue-200">
-            <Utensils className="w-3 h-3 text-[#0057b8]" />
-            Ca Trưa
-          </span>
-        );
+        return 'Ca Trưa';
       case 'DINNER':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-800 border border-indigo-200">
-            <Moon className="w-3 h-3 text-indigo-600" />
-            Ca Tối
-          </span>
-        );
+        return 'Ca Tối';
       default:
-        return <Badge variant="neutral" size="sm">{mealType}</Badge>;
+        return mealType || '';
     }
   };
-
-  const getCategoryBadge = (category: string) => {
-    switch (category) {
-      case 'MAIN':
-        return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-            Món chính
-          </span>
-        );
-      case 'SIDE':
-        return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-            Món phụ
-          </span>
-        );
-      case 'SOUP':
-        return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-            Món canh
-          </span>
-        );
-      case 'DRINK':
-        return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200">
-            Đồ uống
-          </span>
-        );
-      case 'DESSERT':
-        return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-            Tráng miệng
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-            {category || 'Món ăn'}
-          </span>
-        );
-    }
-  };
-
-  const getCategoryDot = (category: string) => {
-    switch (category) {
-      case 'MAIN':
-        return <span className="size-1.5 rounded-full bg-blue-500 shrink-0" title="Món chính" />;
-      case 'SIDE':
-        return <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" title="Món phụ" />;
-      case 'SOUP':
-        return <span className="size-1.5 rounded-full bg-amber-500 shrink-0" title="Món canh" />;
-      case 'DRINK':
-        return <span className="size-1.5 rounded-full bg-cyan-500 shrink-0" title="Đồ uống" />;
-      case 'DESSERT':
-        return <span className="size-1.5 rounded-full bg-purple-500 shrink-0" title="Tráng miệng" />;
-      default:
-        return <span className="size-1.5 rounded-full bg-slate-400 shrink-0" title="Món ăn" />;
-    }
-  };
-
-  const currentCanteenName = useMemo(() => {
-    if (activeCanteenId === 'ALL') return 'Tất cả cơ sở';
-    const c = canteens.find((x) => x.id === activeCanteenId);
-    return c?.name || 'Cơ sở đã chọn';
-  }, [canteens, activeCanteenId]);
 
   const selectedDay = weekDays[selectedDayIndex] || weekDays[0];
 
-  const shiftDefinitions = [
-    {
-      type: 'BREAKFAST',
-      title: 'Ca Sáng',
-      time: '06:30 – 08:30',
-      badgeLabel: 'Bữa Sáng',
-      icon: <Sun className="w-4 h-4 text-amber-500" />,
-      tagColor: 'bg-amber-50 text-amber-800 border-amber-200',
-      accentBg: 'bg-amber-50/30',
-      bannerGradient: '',
-      borderClass: 'border-slate-200',
-      dishHoverBorder: 'hover:border-amber-300 hover:bg-amber-50/20',
-    },
-    {
-      type: 'LUNCH',
-      title: 'Ca Trưa',
-      time: '11:00 – 13:00',
-      badgeLabel: 'Bữa Trưa',
-      icon: <Utensils className="w-4 h-4 text-[#0057b8]" />,
-      tagColor: 'bg-blue-50 text-[#0057b8] border-blue-200',
-      accentBg: 'bg-blue-50/30',
-      bannerGradient: '',
-      borderClass: 'border-slate-200',
-      dishHoverBorder: 'hover:border-blue-300 hover:bg-blue-50/20',
-    },
-    {
-      type: 'DINNER',
-      title: 'Ca Tối',
-      time: '17:00 – 19:00',
-      badgeLabel: 'Bữa Tối',
-      icon: <Moon className="w-4 h-4 text-indigo-600" />,
-      tagColor: 'bg-indigo-50 text-indigo-800 border-indigo-200',
-      accentBg: 'bg-indigo-50/30',
-      bannerGradient: '',
-      borderClass: 'border-slate-200',
-      dishHoverBorder: 'hover:border-indigo-300 hover:bg-indigo-50/20',
-    },
+  const visibleShiftsInMatrix = useMemo(() => {
+    if (matrixShiftFilter === 'ALL') return SHIFT_DEFINITIONS;
+    return SHIFT_DEFINITIONS.filter((s) => s.type === matrixShiftFilter);
+  }, [matrixShiftFilter]);
+
+  const topTabs = [
+    { id: 'weekly' as const, label: 'Thực đơn theo tuần' },
+    { id: 'dishes' as const, label: 'Danh mục món & BOM' },
+    { id: 'import' as const, label: 'Nhập Excel' },
   ];
 
-  const visibleShiftsInMatrix = useMemo(() => {
-    if (matrixShiftFilter === 'ALL') return shiftDefinitions;
-    return shiftDefinitions.filter((s) => s.type === matrixShiftFilter);
-  }, [matrixShiftFilter, shiftDefinitions]);
-
   return (
-    <div className="space-y-5 max-w-7xl mx-auto pb-12 animate-in fade-in duration-300">
-      {/* ======================================================== */}
-      {/* 1. UNIFIED CLEAN TOP ACTION & TAB BAR                    */}
-      {/* ======================================================== */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 pb-0">
-        <div className="flex items-center gap-6 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('weekly')}
-            className={`pb-3 text-xs font-semibold border-b-2 transition flex items-center gap-2 cursor-pointer shrink-0 ${
-              activeTab === 'weekly'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <CalendarDays className="w-4 h-4" />
-            <span>Thực đơn theo tuần</span>
-            {weeklyStats.mealCount > 0 && (
-              <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-blue-50 text-primary font-bold">
-                {weeklyStats.mealCount} ca
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('dishes')}
-            className={`pb-3 text-xs font-semibold border-b-2 transition flex items-center gap-2 cursor-pointer shrink-0 ${
-              activeTab === 'dishes'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Utensils className="w-4 h-4" />
-            <span>Danh mục món & BOM</span>
-            {dishes.length > 0 && (
-              <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-slate-100 text-slate-700 font-bold">
-                {dishes.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('import')}
-            className={`pb-3 text-xs font-semibold border-b-2 transition flex items-center gap-2 cursor-pointer shrink-0 ${
-              activeTab === 'import'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <UploadCloud className="w-4 h-4" />
-            <span>Nhập thực đơn từ Excel</span>
-          </button>
+    <div className="space-y-4 max-w-6xl mx-auto">
+      {/* Unified Top Toolbar */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit overflow-x-auto">
+          {topTabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`h-7 px-3 rounded-lg text-xs transition-all cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                    : 'text-slate-500 hover:text-slate-800 font-medium'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Action buttons aligned right */}
-        <div className="flex items-center gap-2 pb-2.5 shrink-0">
-          {activeCanteenId && activeCanteenId !== 'ALL' && (
-            <Button
-              variant="outline"
-              size="sm"
-              icon={<Tv className="w-3.5 h-3.5 text-primary" />}
-              onClick={() => window.open(`/display/${activeCanteenId}`, '_blank')}
-            >
-              Màn hình TV
-            </Button>
-          )}
-
-          <Button
-            variant="outline"
-            size="sm"
-            icon={<Download className="w-3.5 h-3.5" />}
-            onClick={handleDownloadTemplate}
-          >
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" icon={Download} onClick={handleDownloadTemplate}>
             Tải Excel mẫu
           </Button>
-
           <Button
             variant="primary"
             size="sm"
-            icon={<UploadCloud className="w-3.5 h-3.5" />}
+            icon={UploadCloud}
             onClick={() => setActiveTab('import')}
           >
             Nhập Excel
@@ -628,90 +465,83 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
       {activeTab === 'weekly' && (
         <div className="space-y-4">
           {/* Week Control Bar + View Switcher */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
-            {/* Week navigation */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="inline-flex items-center border border-slate-200 rounded-xl bg-slate-50 p-0.5">
+              <div className="inline-flex items-center bg-slate-100 rounded-xl p-1">
                 <button
+                  type="button"
                   onClick={handlePrevWeek}
-                  className="p-1.5 hover:bg-white text-slate-700 rounded-lg transition cursor-pointer"
+                  className="size-7 rounded-lg hover:bg-white text-slate-600 flex items-center justify-center transition cursor-pointer"
                   title="Tuần trước"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="size-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={handleCurrentWeek}
-                  className="px-3 py-1 hover:bg-white text-slate-800 text-xs font-bold rounded-lg transition cursor-pointer"
+                  className="h-7 px-2.5 rounded-lg hover:bg-white text-slate-800 text-xs font-medium transition cursor-pointer"
                 >
                   Tuần này
                 </button>
                 <button
+                  type="button"
                   onClick={handleNextWeek}
-                  className="p-1.5 hover:bg-white text-slate-700 rounded-lg transition cursor-pointer"
+                  className="size-7 rounded-lg hover:bg-white text-slate-600 flex items-center justify-center transition cursor-pointer"
                   title="Tuần kế tiếp"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="size-4" />
                 </button>
               </div>
 
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-bold font-mono text-slate-800">
-                <Calendar className="w-3.5 h-3.5 text-primary" />
-                <span>
-                  {currentWeekMonday.toLocaleDateString('vi-VN')} – {sundayDate.toLocaleDateString('vi-VN')}
-                </span>
-              </div>
+              <span className="font-mono text-xs text-slate-600 px-2">
+                {currentWeekMonday.toLocaleDateString('vi-VN')} –{' '}
+                {sundayDate.toLocaleDateString('vi-VN')}
+              </span>
 
-              <input
-                type="date"
+              <DatePickerButton
                 value={weekDays[0].dateStr}
                 onChange={handleDatePick}
-                className="h-8 px-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 cursor-pointer focus:outline-hidden focus:border-primary"
                 title="Chọn ngày để nhảy đến tuần"
               />
             </div>
 
-            {/* View Mode Switcher */}
-            <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-medium">
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit">
               <button
+                type="button"
                 onClick={() => setViewMode('day')}
-                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`h-7 px-3 rounded-lg text-xs transition-all cursor-pointer ${
                   viewMode === 'day'
-                    ? 'bg-white text-primary font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                    : 'text-slate-500 hover:text-slate-800 font-medium'
                 }`}
               >
-                <Calendar className="w-3.5 h-3.5" />
-                <span>Xem theo Ngày</span>
+                Theo ngày
               </button>
-
               <button
+                type="button"
                 onClick={() => setViewMode('week')}
-                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`h-7 px-3 rounded-lg text-xs transition-all cursor-pointer ${
                   viewMode === 'week'
-                    ? 'bg-white text-primary font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                    : 'text-slate-500 hover:text-slate-800 font-medium'
                 }`}
               >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span>Toàn tuần (Ma trận phân khu)</span>
+                Toàn tuần
               </button>
             </div>
           </div>
 
-          {/* Loading Indicator */}
           {weeklyLoading && (
-            <div className="py-16 text-center text-xs text-muted flex items-center justify-center gap-2 bg-white rounded-2xl border border-slate-200">
-              <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+            <div className="py-14 text-center text-xs text-slate-400 flex items-center justify-center gap-2 bg-white rounded-2xl border border-slate-200/80">
+              <Loader2 className="size-4 text-[#0057b8] animate-spin" />
               <span>Đang tải thực đơn tuần...</span>
             </div>
           )}
 
-          {/* ============================================================== */}
-          {/* VIEW MODE 1: XEM THEO NGÀY (DAILY FOCUS VIEW - SIÊU THOÁNG MẮT) */}
-          {/* ============================================================== */}
+          {/* VIEW 1: DAILY VIEW */}
           {!weeklyLoading && viewMode === 'day' && (
             <div className="space-y-4">
-              {/* 7-Day Pill Selector Strip */}
+              {/* 7-Day Selector Strip */}
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
                 {weekDays.map((day, idx) => {
                   const isSelected = selectedDayIndex === idx;
@@ -723,79 +553,59 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
                   return (
                     <button
                       key={day.dateStr}
+                      type="button"
                       onClick={() => setSelectedDayIndex(idx)}
-                      className={`p-3 rounded-2xl border text-center transition-all cursor-pointer relative ${
+                      className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
                         isSelected
-                          ? 'bg-primary text-white border-primary shadow-sm ring-2 ring-primary/20'
-                          : day.isToday
-                          ? 'bg-blue-50/70 border-blue-200 text-slate-800 hover:bg-blue-50'
-                          : 'bg-white border-slate-200/90 text-slate-700 hover:bg-slate-50'
+                          ? 'bg-[#0057b8] text-white border-[#0057b8] shadow-xs'
+                          : 'bg-white border-slate-200/80 text-slate-700 hover:border-[#0057b8]/50'
                       }`}
                     >
-                      {day.isToday && (
-                        <span
-                          className={`absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] font-bold px-2 py-0.2 rounded-full uppercase tracking-wider ${
-                            isSelected ? 'bg-white text-slate-900 border border-slate-200' : 'bg-slate-900 text-white'
-                          }`}
-                        >
-                          Hôm nay
+                      <div className="flex items-center justify-center gap-1.5 text-xs font-medium">
+                        {day.isToday && (
+                          <span
+                            className={`size-1.5 rounded-full shrink-0 ${
+                              isSelected ? 'bg-white' : 'bg-[#0057b8]'
+                            }`}
+                          />
+                        )}
+                        <span className={isSelected ? 'text-white' : 'text-slate-800'}>
+                          {day.dayLabel}
                         </span>
-                      )}
-
-                      <div className={`text-xs font-bold ${isSelected ? 'text-white' : 'text-slate-900'}`}>
-                        {day.dayLabel}
                       </div>
 
                       <div
-                        className={`font-mono text-sm font-extrabold mt-0.5 ${
-                          isSelected ? 'text-white' : 'text-slate-800'
+                        className={`font-mono text-xs font-semibold mt-0.5 ${
+                          isSelected ? 'text-blue-50' : 'text-slate-600'
                         }`}
                       >
                         {day.date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
                       </div>
 
-                      <div className="mt-1.5 text-[11px]">
-                        {dayMealsCount > 0 ? (
-                          <span
-                            className={`inline-block px-2 py-0.2 rounded-full font-medium ${
-                              isSelected
-                                ? 'bg-white/20 text-white'
-                                : 'bg-emerald-50 text-emerald-700 font-semibold'
-                            }`}
-                          >
-                            {dayMealsCount} ca có món
-                          </span>
-                        ) : (
-                          <span className={isSelected ? 'text-white/60' : 'text-slate-400'}>
-                            Trống lịch
-                          </span>
-                        )}
+                      <div
+                        className={`mt-1 text-[11px] ${
+                          isSelected ? 'text-blue-100' : 'text-slate-400'
+                        }`}
+                      >
+                        {dayMealsCount > 0 ? `${dayMealsCount} ca có món` : 'Trống'}
                       </div>
                     </button>
                   );
                 })}
               </div>
 
-              {/* Day Header */}
-              <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm text-slate-900">
-                    Thực đơn {selectedDay.dayLabel}, ngày {selectedDay.date.toLocaleDateString('vi-VN')}
-                  </span>
-                  {selectedDay.isToday && (
-                    <Badge variant="brand" size="sm">
-                      Hôm nay
-                    </Badge>
-                  )}
-                </div>
-                <span className="text-xs text-slate-500">
-                  Nhấp vào món ăn bất kỳ để xem chi tiết định mức nguyên liệu BOM
+              <div className="flex items-center justify-between px-1 text-xs">
+                <span className="font-medium text-slate-800">
+                  {selectedDay.dayLabel}, {selectedDay.date.toLocaleDateString('vi-VN')}
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Nhấp vào món để xem định mức nguyên liệu BOM
                 </span>
               </div>
 
-              {/* 3 Spacious Columns (Sáng, Trưa, Tối) */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                {shiftDefinitions.map((shift) => {
+              {/* 3 Shift Cards */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+                {SHIFT_DEFINITIONS.map((shift) => {
                   const menuKey = `${selectedDay.dateStr}_${shift.type}`;
                   const menuData = menusByDateAndMeal.get(menuKey);
                   const dishesList = menuData?.items || [];
@@ -803,103 +613,78 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
                   return (
                     <div
                       key={shift.type}
-                      className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden flex flex-col"
+                      className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden"
                     >
-                      {/* Shift Column Header */}
-                      <div className={`p-4 border-b border-slate-200 flex items-center justify-between ${shift.accentBg}`}>
-                        <div className="flex items-center gap-2.5">
-                          <div className="p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                            {shift.icon}
+                      {/* Shift Header */}
+                      <div className="px-4 py-3.5 bg-slate-50/60 border-b border-slate-100 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={`size-8 rounded-xl flex items-center justify-center shrink-0 ${shift.iconBg}`}
+                          >
+                            {renderShiftIcon(shift.type)}
                           </div>
-                          <div>
-                            <h3 className="font-bold text-sm text-slate-900">{shift.title}</h3>
-                            <span className="text-xs font-mono text-slate-500">{shift.time}</span>
+                          <div className="min-w-0">
+                            <h3 className="text-xs font-semibold text-slate-900">{shift.title}</h3>
+                            <p className="text-[11px] font-mono text-slate-400 mt-0.5">
+                              {shift.time}
+                            </p>
                           </div>
                         </div>
 
-                        <span
-                          className={`text-xs font-mono font-bold px-2.5 py-1 rounded-full border ${shift.tagColor}`}
-                        >
+                        <span className="text-xs font-medium text-slate-600 bg-white px-2.5 py-1 rounded-lg border border-slate-200/80 shrink-0 tabular-nums">
                           {dishesList.length} món
                         </span>
                       </div>
 
-                      {/* Dishes List */}
-                      <div className="p-4 space-y-3 flex-1">
-                        {dishesList.length > 0 ? (
-                          dishesList.map((item: any) => {
+                      {/* Shift Dishes */}
+                      {dishesList.length > 0 ? (
+                        <div className="p-3 space-y-2">
+                          {dishesList.map((item: any) => {
                             const dish = item.dish;
                             if (!dish) return null;
+                            const catMeta = getCategoryMeta(dish.category);
                             const recipeCount = dish.recipes?.length || 0;
 
                             return (
-                              <div
+                              <button
                                 key={dish.id}
+                                type="button"
                                 onClick={() =>
                                   setSelectedDishModal({
                                     ...dish,
                                     canteenName: menuData?.canteen?.name,
                                     mealType: shift.type,
-                                    mealTitle: shift.title,
                                   })
                                 }
-                                className="p-3.5 rounded-xl border border-slate-200/90 hover:border-primary/40 hover:bg-slate-50/60 transition cursor-pointer group shadow-2xs space-y-2"
+                                className="w-full p-3 rounded-xl border border-slate-200/75 bg-white hover:border-[#0057b8] hover:shadow-2xs transition-all cursor-pointer group flex items-center justify-between gap-3 text-left"
                               >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div>
-                                    <div className="flex items-center gap-1.5 mb-1">
-                                      {getCategoryBadge(dish.category)}
-                                    </div>
-                                    <h4 className="font-bold text-sm text-slate-900 group-hover:text-primary transition leading-snug">
-                                      {dish.name}
-                                    </h4>
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-xs font-medium text-slate-900 group-hover:text-[#0057b8] line-clamp-2 leading-snug transition-colors">
+                                    {dish.name}
                                   </div>
-
-                                  {dish.extraPrice > 0 ? (
-                                    <span className="font-mono text-xs font-bold text-primary bg-blue-50 px-2 py-1 rounded-lg border border-blue-200 shrink-0">
-                                      +{formatVND(Number(dish.extraPrice))}
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-400 mt-1">
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <span className={`size-1.5 rounded-full shrink-0 ${catMeta.dot}`} />
+                                      <span>{catMeta.label}</span>
                                     </span>
-                                  ) : (
-                                    <span className="text-[11px] text-slate-400 font-medium shrink-0">
-                                      0 ₫
-                                    </span>
-                                  )}
+                                    {recipeCount > 0 && (
+                                      <span>• BOM {recipeCount}</span>
+                                    )}
+                                  </div>
                                 </div>
 
-                                {dish.description && (
-                                  <p className="text-xs text-slate-500 line-clamp-2">
-                                    {dish.description}
-                                  </p>
-                                )}
-
-                                <div className="pt-1 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100">
-                                  {recipeCount > 0 ? (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md font-medium">
-                                      <Layers className="w-3 h-3 text-primary" />
-                                      {recipeCount} nguyên liệu BOM
-                                    </span>
-                                  ) : (
-                                    <span className="text-[11px] text-slate-400 italic">Chưa gắn BOM</span>
-                                  )}
-
-                                  <span className="text-primary text-[11px] font-semibold opacity-0 group-hover:opacity-100 transition">
-                                    Xem chi tiết →
-                                  </span>
+                                <div className="shrink-0">
+                                  <ChevronRight className="size-4 text-slate-300 group-hover:text-[#0057b8] group-hover:translate-x-0.5 transition-all" />
                                 </div>
-                              </div>
+                              </button>
                             );
-                          })
-                        ) : (
-                          <div className="h-44 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 flex flex-col items-center justify-center text-center p-4">
-                            <span className="text-xs font-medium text-slate-400">
-                              Chưa có món ăn nào cho {shift.title}
-                            </span>
-                            <span className="text-[11px] text-slate-400 mt-1">
-                              Nhập file Excel để đồng bộ thực đơn ca này
-                            </span>
-                          </div>
-                        )}
-                      </div>
+                          })}
+                        </div>
+                      ) : (
+                        <div className="py-12 px-4 text-center text-xs text-slate-400">
+                          Chưa có món cho {shift.title}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -907,94 +692,48 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
             </div>
           )}
 
-          {/* ============================================================== */}
-          {/* VIEW MODE 2: XEM MA TRẬN TOÀN TUẦN PHÂN KHU (RÕ RÀNG, TÁCH BẠCH) */}
-          {/* ============================================================== */}
+          {/* VIEW 2: WEEKLY MATRIX VIEW */}
           {!weeklyLoading && viewMode === 'week' && (
-            <div className="space-y-6">
-              {/* Shift Quick Filter Toolbar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Filter className="w-3.5 h-3.5 text-primary" />
-                    Lọc ca ăn hiển thị:
-                  </span>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {[
-                      { id: 'ALL', label: 'Tất cả 3 ca', count: '21 ô' },
-                      { id: 'LUNCH', label: 'Chỉ Ca Trưa', count: '7 ngày' },
-                      { id: 'BREAKFAST', label: 'Chỉ Ca Sáng', count: '7 ngày' },
-                      { id: 'DINNER', label: 'Chỉ Ca Tối', count: '7 ngày' },
-                    ].map((btn) => (
-                      <button
-                        key={btn.id}
-                        onClick={() => setMatrixShiftFilter(btn.id as any)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                          matrixShiftFilter === btn.id
-                            ? 'bg-primary text-white shadow-xs'
-                            : 'bg-slate-100 text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 border border-slate-200'
-                        }`}
-                      >
-                        {btn.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 text-xs text-slate-500">
-                  <span>Món chính • Canh • Món phụ • Tráng miệng</span>
-                </div>
+            <div className="space-y-4">
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+                {[
+                  { id: 'ALL', label: 'Tất cả 3 ca' },
+                  { id: 'LUNCH', label: 'Ca Trưa' },
+                  { id: 'BREAKFAST', label: 'Ca Sáng' },
+                  { id: 'DINNER', label: 'Ca Tối' },
+                ].map((btn) => (
+                  <button
+                    key={btn.id}
+                    type="button"
+                    onClick={() => setMatrixShiftFilter(btn.id as any)}
+                    className={`h-7 px-3 rounded-lg text-xs transition-all cursor-pointer ${
+                      matrixShiftFilter === btn.id
+                        ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                        : 'text-slate-500 hover:text-slate-800 font-medium'
+                    }`}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
               </div>
 
-              {/* RENDER EACH SHIFT AS A DISTINCT, INDEPENDENT SECTION */}
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {visibleShiftsInMatrix.map((shift) => (
                   <div
                     key={shift.type}
-                    className={`bg-white rounded-2xl border ${shift.borderClass} shadow-2xs overflow-hidden`}
+                    className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden"
                   >
-                    {/* Shift Banner Header */}
-                    <div
-                      className="p-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                          {shift.icon}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-extrabold text-sm text-slate-900 uppercase tracking-tight">
-                              {shift.title} ({shift.time})
-                            </h3>
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700">
-                              {shift.badgeLabel}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 mt-0.5">
-                            Theo dõi thực đơn 7 ngày từ Thứ Hai đến Chủ Nhật
-                          </p>
-                        </div>
+                    <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`size-1.5 rounded-full ${shift.dot}`} />
+                        <span className="text-xs font-semibold text-slate-800">{shift.title}</span>
+                        <span className="text-[11px] font-mono text-slate-400">{shift.time}</span>
                       </div>
-
-                      {/* Shift Stats */}
-                      {(() => {
-                        const activeDays = weekDays.filter(
-                          (d) =>
-                            (menusByDateAndMeal.get(`${d.dateStr}_${shift.type}`)?.items?.length || 0) > 0
-                        ).length;
-                        return (
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-mono font-bold px-3 py-1 rounded-full border ${shift.tagColor}`}>
-                              {activeDays}/7 ngày đã lên món
-                            </span>
-                          </div>
-                        );
-                      })()}
+                      <span className="text-[11px] text-slate-400">Thứ 2 – Chủ Nhật</span>
                     </div>
 
-                    {/* 7 Distinct Columns with Physical Separation (12px gap) */}
-                    <div className="p-4 overflow-x-auto">
-                      <div className="grid grid-cols-7 gap-3 min-w-[1100px]">
+                    <div className="p-3 overflow-x-auto">
+                      <div className="grid grid-cols-7 gap-2.5 min-w-[980px]">
                         {weekDays.map((day) => {
                           const menuKey = `${day.dateStr}_${shift.type}`;
                           const menuData = menusByDateAndMeal.get(menuKey);
@@ -1003,24 +742,23 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
                           return (
                             <div
                               key={day.dateStr}
-                              className={`rounded-2xl border transition-all flex flex-col ${
+                              className={`rounded-xl border flex flex-col ${
                                 day.isToday
-                                  ? 'bg-slate-50/70 border-slate-900 shadow-xs ring-1 ring-slate-900'
-                                  : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
+                                  ? 'border-[#0057b8] bg-[#EFF6FF]/30'
+                                  : 'border-slate-200/75 bg-slate-50/40'
                               }`}
                             >
-                              {/* Day Header Box */}
                               <div
-                                className={`p-2.5 text-center border-b rounded-t-2xl ${
+                                className={`px-2.5 py-2 text-center border-b rounded-t-xl ${
                                   day.isToday
-                                    ? 'bg-slate-900 text-white border-slate-900'
-                                    : 'bg-white border-slate-200'
+                                    ? 'bg-[#0057b8] text-white border-[#0057b8]'
+                                    : 'bg-white border-slate-100'
                                 }`}
                               >
-                                <div className="text-xs font-bold">{day.dayLabel}</div>
+                                <div className="text-[11px] font-medium">{day.shortLabel}</div>
                                 <div
-                                  className={`font-mono text-[11px] font-semibold mt-0.5 ${
-                                    day.isToday ? 'text-slate-300' : 'text-slate-500'
+                                  className={`font-mono text-[11px] ${
+                                    day.isToday ? 'text-blue-100' : 'text-slate-400'
                                   }`}
                                 >
                                   {day.date.toLocaleDateString('vi-VN', {
@@ -1028,77 +766,42 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
                                     month: '2-digit',
                                   })}
                                 </div>
-                                {day.isToday && (
-                                  <span className="inline-block text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-800 text-slate-200 mt-1 uppercase tracking-wider">
-                                    Hôm nay
-                                  </span>
-                                )}
                               </div>
 
-                              {/* Dishes in this Day */}
-                              <div className="p-2 space-y-2 flex-1 min-h-[140px]">
+                              <div className="p-2 space-y-1.5 flex-1 min-h-[110px]">
                                 {dishesList.length > 0 ? (
                                   dishesList.map((item: any) => {
                                     const dish = item.dish;
                                     if (!dish) return null;
-                                    const recipeCount = dish.recipes?.length || 0;
-
+                                    const catMeta = getCategoryMeta(dish.category);
                                     return (
-                                      <div
+                                      <button
                                         key={dish.id}
+                                        type="button"
                                         onClick={() =>
                                           setSelectedDishModal({
                                             ...dish,
                                             canteenName: menuData?.canteen?.name,
                                             mealType: shift.type,
-                                            mealTitle: shift.title,
                                           })
                                         }
-                                        className={`p-2.5 rounded-xl bg-white border border-slate-200/90 ${shift.dishHoverBorder} transition cursor-pointer group text-left space-y-1 shadow-2xs hover:-translate-y-0.5`}
+                                        className="w-full p-2 rounded-lg bg-white border border-slate-200/75 hover:border-[#0057b8] transition text-left cursor-pointer space-y-1"
                                       >
-                                        {/* Category Chip & Price */}
-                                        <div className="flex items-center justify-between gap-1">
-                                          <div className="flex items-center gap-1">
-                                            {getCategoryDot(dish.category)}
-                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
-                                              {dish.category === 'MAIN'
-                                                ? 'Chính'
-                                                : dish.category === 'SIDE'
-                                                ? 'Phụ'
-                                                : dish.category === 'SOUP'
-                                                ? 'Canh'
-                                                : dish.category === 'DESSERT'
-                                                ? 'Tráng miệng'
-                                                : 'Món ăn'}
-                                            </span>
-                                          </div>
-
-                                          {dish.extraPrice > 0 && (
-                                            <span className="text-[10px] font-mono font-bold text-primary">
-                                              +{formatVND(Number(dish.extraPrice))}
-                                            </span>
-                                          )}
+                                        <div className="flex items-center gap-1.5">
+                                          <span className={`size-1.5 rounded-full shrink-0 ${catMeta.dot}`} />
+                                          <span className="text-[11px] text-slate-400 truncate">
+                                            {catMeta.label}
+                                          </span>
                                         </div>
-
-                                        {/* Dish Name */}
-                                        <div className="font-bold text-xs text-slate-900 group-hover:text-primary transition line-clamp-2 leading-tight">
+                                        <div className="text-xs font-medium text-slate-800 line-clamp-2 leading-snug">
                                           {dish.name}
                                         </div>
-
-                                        {/* BOM Mini Chip */}
-                                        {recipeCount > 0 && (
-                                          <div className="pt-0.5 flex items-center gap-1 text-[9.5px] font-mono text-slate-500">
-                                            <Layers className="w-2.5 h-2.5 text-primary" />
-                                            <span>BOM {recipeCount}</span>
-                                          </div>
-                                        )}
-                                      </div>
+                                      </button>
                                     );
                                   })
                                 ) : (
-                                  <div className="h-full min-h-[110px] rounded-xl border border-dashed border-slate-200 flex flex-col items-center justify-center p-2 text-center">
-                                    <span className="text-[11px] font-medium text-slate-400">— Trống —</span>
-                                    <span className="text-[10px] text-slate-300 mt-0.5">Chưa có món</span>
+                                  <div className="h-full min-h-[90px] flex items-center justify-center text-[11px] text-slate-300">
+                                    —
                                   </div>
                                 )}
                               </div>
@@ -1116,121 +819,141 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
       )}
 
       {/* ======================================================== */}
-      {/* TAB 2: DANH MỤC MÓN ĂN & BOM                             */}
+      {/* TAB 2: DANH MỤC MÓN ĂN & BOM (FLOATING ROW-CARDS)         */}
       {/* ======================================================== */}
       {activeTab === 'dishes' && (
-        <Card flush className="space-y-0 overflow-hidden shadow-2xs">
-          {/* Search & Filter Toolbar */}
-          <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/70">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-3.5 h-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Tìm kiếm theo tên món ăn..."
-                value={dishSearch}
-                onChange={(e) => setDishSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:border-primary shadow-2xs"
-              />
-            </div>
-
-            {/* Category Filter Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-2xs p-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit overflow-x-auto">
               {[
                 { id: 'ALL', label: 'Tất cả' },
-                { id: 'FOOD', label: 'Món chính & phụ' },
+                { id: 'FOOD', label: 'Chính & Phụ' },
                 { id: 'SOUP', label: 'Canh' },
                 { id: 'DESSERT', label: 'Tráng miệng' },
                 { id: 'DRINK', label: 'Đồ uống' },
               ].map((c) => (
                 <button
                   key={c.id}
+                  type="button"
                   onClick={() => setDishCategoryFilter(c.id)}
-                  className={`h-8 px-3 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                  className={`h-7 px-3 rounded-lg text-xs transition-all cursor-pointer whitespace-nowrap ${
                     dishCategoryFilter === c.id
-                      ? 'bg-primary text-white shadow-xs'
-                      : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+                      ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                      : 'text-slate-500 hover:text-slate-800 font-medium'
                   }`}
                 >
                   {c.label}
                 </button>
               ))}
             </div>
+
+            <div className="relative flex-1 lg:w-64 lg:flex-none">
+              <Search className="size-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Tìm theo tên món ăn..."
+                value={dishSearch}
+                onChange={(e) => setDishSearch(e.target.value)}
+                className="w-full pl-9 pr-3 h-9 bg-white border border-slate-200/90 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:border-[#0057b8] focus:ring-1 focus:ring-[#0057b8] outline-hidden transition-colors"
+              />
+            </div>
           </div>
 
-          {/* Dishes Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50/90 text-slate-500 uppercase text-[11px] font-bold border-b border-slate-200">
-                <tr>
-                  <th className="px-5 py-3.5">Tên món ăn</th>
-                  <th className="px-5 py-3.5">Nhóm phân loại</th>
-                  <th className="px-5 py-3.5 text-right">Phụ thu suất ăn</th>
-                  <th className="px-5 py-3.5 text-center">Định mức BOM</th>
-                  <th className="px-5 py-3.5">Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
+          <div className="space-y-3">
+            <div className="overflow-x-auto pb-1">
+              <div className="min-w-[680px] space-y-2">
+                <div className="grid grid-cols-[minmax(220px,1.7fr)_140px_130px_130px_88px] items-center gap-3 px-4 py-1 text-xs font-medium text-slate-400">
+                  <button
+                    type="button"
+                    onClick={toggleDishNameSort}
+                    className="inline-flex items-center gap-1 hover:text-slate-700 transition-colors cursor-pointer text-left"
+                  >
+                    <span>Món ăn</span>
+                    <ChevronsUpDown className="size-3 text-slate-300" />
+                  </button>
+                  <span>Phân loại</span>
+                  <span className="text-right">Định mức BOM</span>
+                  <span>Trạng thái</span>
+                  <span className="text-right">Chi tiết</span>
+                </div>
+
                 {filteredDishes.map((d) => {
+                  const catMeta = getCategoryMeta(d.category);
                   const recipeCount = d.recipes?.length || 0;
+                  const available = d.isAvailable !== false;
+
                   return (
-                    <tr
+                    <div
                       key={d.id}
                       onClick={() => setSelectedDishModal(d)}
-                      className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                      className="group bg-white rounded-xl border border-slate-200/75 hover:border-[#0057b8] hover:shadow-xs px-4 py-3 grid grid-cols-[minmax(220px,1.7fr)_140px_130px_130px_88px] items-center gap-3 transition-all cursor-pointer"
                     >
-                      <td className="px-5 py-4">
-                        <div className="font-bold text-slate-900 group-hover:text-primary transition">
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-slate-800 truncate" title={d.name}>
                           {d.name}
                         </div>
                         {d.description && (
-                          <div className="text-[11px] text-slate-500 truncate max-w-sm mt-0.5">
+                          <div className="text-[11px] text-slate-400 truncate mt-0.5">
                             {d.description}
                           </div>
                         )}
-                      </td>
-                      <td className="px-5 py-4">{getCategoryBadge(d.category)}</td>
-                      <td className="px-5 py-4 text-right font-mono font-bold text-slate-900">
-                        {d.extraPrice > 0 ? (
-                          <span className="text-primary">+{formatVND(Number(d.extraPrice))}</span>
-                        ) : (
-                          <span className="text-slate-500 font-normal">0 ₫ (Tiêu chuẩn)</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-center">
-                        {recipeCount > 0 ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold bg-blue-50 text-primary border border-blue-200">
-                            <Layers className="w-3 h-3" />
-                            {recipeCount} nguyên liệu
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-slate-400 italic">Chưa gắn</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        <Badge variant={d.isAvailable ? 'success' : 'neutral'} size="sm" dot>
-                          {d.isAvailable ? 'Đang phục vụ' : 'Tạm ngưng'}
-                        </Badge>
-                      </td>
-                    </tr>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className={`size-1.5 rounded-full shrink-0 ${catMeta.dot}`} />
+                        <span className="text-xs text-slate-700 truncate">{catMeta.label}</span>
+                      </div>
+
+                      <div className="text-right text-xs text-slate-600 tabular-nums">
+                        {recipeCount > 0 ? `${recipeCount} mục` : <span className="text-slate-300">—</span>}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`size-1.5 rounded-full shrink-0 ${
+                            available ? 'bg-emerald-500' : 'bg-slate-400'
+                          }`}
+                        />
+                        <span className={`text-xs ${available ? 'text-slate-700' : 'text-slate-400'}`}>
+                          {available ? 'Đang bán' : 'Tạm ngưng'}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDishModal(d);
+                          }}
+                          className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-slate-600 group-hover:bg-[#0057b8] group-hover:text-white group-hover:border-[#0057b8] text-xs font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                        >
+                          <Eye className="size-3.5" />
+                          <span>Xem</span>
+                        </button>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
 
-          {filteredDishes.length === 0 && (
-            <div className="py-16 text-center text-xs text-muted">
-              {dishesLoading ? 'Đang tải danh mục món...' : 'Không tìm thấy món ăn nào phù hợp với bộ lọc.'}
+                {filteredDishes.length === 0 && (
+                  <div className="bg-white rounded-xl border border-slate-200/75 py-12 text-center text-xs text-slate-400">
+                    {dishesLoading ? 'Đang tải danh mục món...' : 'Không tìm thấy món ăn phù hợp.'}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </Card>
+
+            <div className="text-xs text-slate-400">{filteredDishes.length} món ăn</div>
+          </div>
+        </div>
       )}
 
       {/* ======================================================== */}
       {/* TAB 3: NHẬP TỪ EXCEL (4-STEP WIZARD)                     */}
       {/* ======================================================== */}
       {activeTab === 'import' && (
-        <div className="space-y-6 max-w-4xl mx-auto">
+        <div className="space-y-5 max-w-4xl mx-auto">
           <ImportStepper
             currentStep={importStep}
             onStepClick={(step) => {
@@ -1240,83 +963,80 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
 
           {importStep <= 2 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-slate-900 flex items-center gap-2">
-                    <span className="size-6 rounded-full bg-blue-50 text-primary text-xs font-bold flex items-center justify-center">
-                      1
-                    </span>
-                    Tải file Excel mẫu chuẩn
+              <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-xs text-slate-800">
+                    1. Tải file Excel mẫu chuẩn
                   </span>
                   <Button
                     variant="outline"
                     size="sm"
-                    icon={<Download className="w-3.5 h-3.5" />}
+                    icon={Download}
                     onClick={handleDownloadTemplate}
                   >
                     Tải file .xlsx
                   </Button>
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  File mẫu chuẩn có 2 sheet đồng bộ: <strong>Sheet 1</strong> (Thực đơn tuần & ca ăn) và <strong>Sheet 2</strong> (Định mức BOM nguyên liệu). Dữ liệu mẫu đã điền sẵn tên cơ sở: <strong>{canteens.find((c) => c.id === activeCanteenId)?.name || 'Cơ sở hiện tại'}</strong>.
+                  Gồm Sheet Thực đơn tuần và Sheet Định mức BOM cho{' '}
+                  <strong className="font-medium text-slate-700">
+                    {canteens.find((c) => c.id === activeCanteenId)?.name || 'cơ sở hiện tại'}
+                  </strong>
+                  .
                 </p>
               </div>
 
-              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
-                <div className="font-bold text-xs text-slate-900 flex items-center gap-2">
-                  <span className="size-6 rounded-full bg-blue-50 text-primary text-xs font-bold flex items-center justify-center">
-                    2
-                  </span>
-                  Kéo thả file đã điền dữ liệu
+              <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-2xs space-y-2">
+                <div className="font-semibold text-xs text-slate-800">
+                  2. Kéo thả file đã điền dữ liệu
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Hệ thống tự động kiểm tra định dạng ngày UTC độc lập múi giờ, đối soát danh mục món, và liên kết công thức nấu với kho bếp.
+                  Hệ thống tự động kiểm tra định dạng ngày, đối soát danh mục món và liên kết công thức nấu với kho bếp.
                 </p>
               </div>
             </div>
           )}
 
           {importStep <= 2 && (
-            <div className="bg-white p-10 rounded-2xl border-2 border-dashed border-slate-300 hover:border-primary text-center relative flex flex-col items-center justify-center transition cursor-pointer shadow-2xs group">
+            <div className="bg-white p-8 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#0057b8]/60 text-center relative flex flex-col items-center justify-center transition cursor-pointer shadow-2xs">
               <input
                 type="file"
                 accept=".xlsx, .xls"
                 onChange={handleFileChange}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
-              <div className="w-14 h-14 rounded-2xl bg-blue-50 text-primary flex items-center justify-center mb-3 group-hover:scale-110 transition">
-                <UploadCloud className="w-7 h-7" />
+              <div className="size-11 rounded-xl bg-[#EFF6FF] text-[#0057b8] flex items-center justify-center mb-2.5">
+                {isUploading ? (
+                  <Loader2 className="size-5 text-[#0057b8] animate-spin" />
+                ) : (
+                  <UploadCloud className="size-5" />
+                )}
               </div>
-              <div className="text-sm font-bold text-slate-900">
-                Kéo thả hoặc nhấp để chọn file Excel thực đơn
+              <div className="text-sm font-semibold text-slate-900">
+                {isUploading
+                  ? 'Đang kiểm tra dữ liệu file Excel...'
+                  : 'Kéo thả hoặc nhấp để chọn file Excel thực đơn'}
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                Chấp nhận định dạng chuẩn .xlsx hoặc .xls (tối đa 10MB)
+              <p className="text-xs text-slate-400 mt-0.5">
+                Hỗ trợ định dạng .xlsx hoặc .xls (tối đa 10MB)
               </p>
               {selectedFile && (
-                <span className="text-xs font-mono font-bold text-primary bg-blue-50 px-3.5 py-1.5 rounded-xl mt-4 border border-blue-200">
+                <span className="text-xs font-mono font-medium text-[#0057b8] bg-[#EFF6FF] px-3 py-1 rounded-lg mt-3">
                   {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
                 </span>
               )}
             </div>
           )}
 
-          {isUploading && (
-            <div className="py-8 text-center text-xs text-muted flex items-center justify-center gap-2 bg-white rounded-2xl border border-slate-200">
-              <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-              <span>Đang kiểm tra và xác thực dữ liệu file Excel...</span>
-            </div>
-          )}
-
           {importStep >= 3 && previewData && (
             <div className="space-y-4 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Bảng đối soát dữ liệu thực đơn ({previewData.validCount} dòng hợp lệ)
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Bảng đối soát thực đơn ({previewData.validCount} dòng hợp lệ)
                   </h3>
-                  <p className="text-xs text-slate-500">
-                    Phân loại trạng thái dòng và định mức BOM nguyên liệu trước khi lưu
+                  <p className="text-xs text-slate-400">
+                    Kiểm tra định mức BOM nguyên liệu trước khi lưu
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1337,7 +1057,7 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
                     disabled={isCommitting || previewData.validCount === 0}
                     onClick={() => setShowCommitModal(true)}
                   >
-                    Tiến hành Lưu ({previewData.validCount})
+                    Lưu ({previewData.validCount})
                   </Button>
                 </div>
               </div>
@@ -1353,28 +1073,28 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
           )}
 
           {importResult && (
-            <Card className="border-emerald-200 bg-emerald-50/60 space-y-3 p-5">
-              <div className="flex items-center gap-2 text-xs font-bold text-emerald-800">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+            <div className="p-4 bg-white border border-slate-200/80 rounded-2xl space-y-3 shadow-2xs">
+              <div className="flex items-center gap-2 text-xs font-medium text-emerald-700">
+                <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
                 <span>{importResult.message}</span>
               </div>
-              <div className="pt-2 flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Button
                   variant="primary"
                   size="sm"
-                  icon={<Calendar className="w-3.5 h-3.5" />}
+                  icon={<Calendar className="size-3.5" />}
                   onClick={() => setActiveTab('weekly')}
                 >
-                  Xem ngay thực đơn tuần
+                  Xem thực đơn tuần
                 </Button>
                 {onNavigateTab && (
                   <Button
                     variant="outline"
                     size="sm"
-                    icon={<ArrowRight className="w-3.5 h-3.5" />}
+                    icon={<ArrowRight className="size-3.5" />}
                     onClick={() => onNavigateTab('forecast')}
                   >
-                    Xem dự báo nguyên liệu bếp
+                    Xem dự báo nguyên liệu
                   </Button>
                 )}
                 <Button
@@ -1385,10 +1105,10 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
                     setImportStep(1);
                   }}
                 >
-                  Tiếp tục nhập đợt mới
+                  Nhập đợt mới
                 </Button>
               </div>
-            </Card>
+            </div>
           )}
 
           {showCommitModal && previewData && (
@@ -1412,107 +1132,78 @@ export const MenuImportPage: React.FC<MenuImportPageProps> = ({ onNavigateTab })
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* 4. MODAL: CHI TIẾT MÓN ĂN & ĐỊNH MỨC NGUYÊN LIỆU BOM     */}
-      {/* ======================================================== */}
+      {/* Modal Chi tiết Món ăn & BOM (Synced with AuditLogsPage style) */}
       {selectedDishModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden space-y-4 p-6 text-xs animate-in zoom-in-95 duration-200">
-            <div className="flex items-start justify-between pb-3.5 border-b border-slate-200">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-slate-900 text-base">{selectedDishModal.name}</h3>
-                  {getCategoryBadge(selectedDishModal.category)}
-                </div>
-                {selectedDishModal.description && (
-                  <p className="text-slate-500 text-xs">{selectedDishModal.description}</p>
-                )}
-                <div className="flex items-center gap-3 pt-1 text-[11px] text-slate-500">
-                  {selectedDishModal.canteenName && (
-                    <span className="flex items-center gap-1">
-                      <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                      {selectedDishModal.canteenName}
-                    </span>
-                  )}
-                  {selectedDishModal.mealType && (
-                    <span>{getMealTypeBadge(selectedDishModal.mealType)}</span>
-                  )}
-                </div>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedDishModal(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop animate-in fade-in duration-150"
+        >
+          <div className="bg-white rounded-2xl shadow-modal border border-slate-200/80 w-full max-w-md p-5 space-y-4 text-xs">
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="min-w-0">
+                <h3 className="font-semibold text-slate-900 text-sm">{selectedDishModal.name}</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {getCategoryMeta(selectedDishModal.category).label}
+                  {selectedDishModal.mealType ? ` • ${getMealLabel(selectedDishModal.mealType)}` : ''}
+                  {selectedDishModal.canteenName ? ` • ${selectedDishModal.canteenName}` : ''}
+                </p>
               </div>
-
               <button
                 type="button"
-                className="p-1.5 text-slate-400 hover:text-slate-800 rounded-xl hover:bg-slate-100 transition cursor-pointer"
                 onClick={() => setSelectedDishModal(null)}
+                className="size-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer shrink-0"
+                aria-label="Đóng"
               >
-                <X className="w-5 h-5" />
+                <X className="size-3.5" />
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                <span className="text-slate-600 font-medium">Phụ thu suất ăn:</span>
-                <span className="font-bold text-slate-900 font-mono text-sm">
-                  {selectedDishModal.extraPrice > 0
-                    ? `+${formatVND(Number(selectedDishModal.extraPrice))}`
-                    : '0 ₫ (Suất cơm tiêu chuẩn)'}
-                </span>
-              </div>
+            {selectedDishModal.description && (
+              <p className="text-xs text-slate-500 leading-relaxed">
+                {selectedDishModal.description}
+              </p>
+            )}
 
-              <div>
-                <div className="font-bold text-slate-900 flex items-center gap-2 mb-2.5">
-                  <Layers className="w-4 h-4 text-primary" />
-                  <span>Công thức BOM (Định lượng cho 1 suất ăn):</span>
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-slate-700 block">
+                Định mức nguyên liệu BOM (1 suất)
+              </span>
+
+              {selectedDishModal.recipes && selectedDishModal.recipes.length > 0 ? (
+                <div className="rounded-xl border border-slate-200/80 divide-y divide-slate-100 bg-slate-50/40">
+                  {selectedDishModal.recipes.map((rec: any, idx: number) => {
+                    const ingName = rec.ingredient?.name || rec.ingredientName || 'Nguyên liệu';
+                    const unit = rec.ingredient?.unit || rec.unit || 'kg';
+                    const qty = rec.amountPerServing ?? rec.quantityRequired ?? rec.amount ?? 0;
+
+                    return (
+                      <div
+                        key={idx}
+                        className="px-3.5 py-2.5 flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-medium text-slate-800">{ingName}</div>
+                          {rec.prepNote && (
+                            <div className="text-[11px] text-slate-400 mt-0.5">{rec.prepNote}</div>
+                          )}
+                        </div>
+                        <span className="font-mono font-medium text-slate-800 shrink-0 tabular-nums">
+                          {qty} {unit}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                {selectedDishModal.recipes && selectedDishModal.recipes.length > 0 ? (
-                  <div className="overflow-hidden border border-slate-200 rounded-xl shadow-2xs">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 text-slate-500 text-[11px] uppercase font-bold border-b border-slate-200">
-                        <tr>
-                          <th className="px-3.5 py-2.5">Nguyên liệu</th>
-                          <th className="px-3.5 py-2.5 text-right">Định lượng</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {selectedDishModal.recipes.map((rec: any, idx: number) => {
-                          const ingName = rec.ingredient?.name || rec.ingredientName || 'Nguyên liệu';
-                          const unit = rec.ingredient?.unit || rec.unit || 'kg';
-                          return (
-                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                              <td className="px-3.5 py-2.5 text-slate-900 font-medium">
-                                {ingName}
-                                {rec.prepNote && (
-                                  <span className="text-[10px] text-slate-400 block mt-0.5">
-                                    {rec.prepNote}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-3.5 py-2.5 text-right font-bold text-slate-900 font-mono">
-                                {rec.amountPerServing || rec.amount} {unit}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="p-5 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                    Món ăn này chưa có công thức định mức BOM nguyên liệu.
-                  </div>
-                )}
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-200/80 text-[11px] text-slate-600 flex items-start gap-2.5">
-                <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                <span className="leading-relaxed">
-                  Dữ liệu thực đơn và định mức BOM được đồng bộ tự động từ file Excel. Để điều chỉnh món hoặc định lượng, vui lòng cập nhật file Excel và nhập lại.
-                </span>
-              </div>
+              ) : (
+                <div className="p-4 text-center text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                  Món ăn này chưa gắn công thức BOM nguyên liệu.
+                </div>
+              )}
             </div>
 
-            <div className="pt-3 border-t border-slate-200 flex justify-end">
+            <div className="pt-2 border-t border-slate-100 flex justify-end">
               <Button variant="outline" size="sm" onClick={() => setSelectedDishModal(null)}>
                 Đóng
               </Button>

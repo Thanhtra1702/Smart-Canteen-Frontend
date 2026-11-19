@@ -1,19 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, ChevronDown, Menu, Building2 } from 'lucide-react';
+import { ListIcon as Menu, BuildingsIcon as Building2 } from '@phosphor-icons/react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
+import { SelectDropdown } from '../ui/SelectDropdown';
 
 interface HeaderProps {
   title: string;
-  onRefresh?: () => void;
-  isRefreshing?: boolean;
   onToggleSidebar?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   title,
-  onRefresh,
-  isRefreshing = false,
   onToggleSidebar,
 }) => {
   const { user, selectedCanteenId, setSelectedCanteenId } = useAuth();
@@ -26,9 +23,6 @@ export const Header: React.FC<HeaderProps> = ({
         const res = await api.get(endpoint);
         const list = Array.isArray(res.data) ? res.data : [];
         setCanteens(list);
-        if (list.length > 0 && selectedCanteenId !== 'ALL' && !list.some((c: any) => c.id === selectedCanteenId)) {
-          setSelectedCanteenId(list.length === 1 ? list[0].id : 'ALL');
-        }
       } catch (err) {
         console.error('Failed to load canteens', err);
       }
@@ -36,24 +30,34 @@ export const Header: React.FC<HeaderProps> = ({
     fetchCanteens();
   }, [user]);
 
+  useEffect(() => {
+    if (
+      canteens.length > 0 &&
+      selectedCanteenId !== 'ALL' &&
+      !canteens.some((c) => c.id === selectedCanteenId)
+    ) {
+      setSelectedCanteenId(canteens.length === 1 ? canteens[0].id : 'ALL');
+    }
+  }, [canteens, selectedCanteenId, setSelectedCanteenId]);
+
   return (
-    <header className="h-14 bg-surface/95 backdrop-blur-xs border-b border-border sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 md:px-8">
+    <header className="h-14 bg-white/95 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 md:px-8">
       {/* Title & Context */}
       <div className="flex items-center gap-2.5 min-w-0">
         {onToggleSidebar && (
           <button
             onClick={onToggleSidebar}
-            className="lg:hidden p-1.5 -ml-1 text-muted hover:text-foreground hover:bg-slate-100 rounded-lg cursor-pointer shrink-0"
+            className="lg:hidden p-1.5 -ml-1 text-muted hover:text-foreground hover:bg-slate-100 rounded-xl cursor-pointer shrink-0"
             title="Mở thanh điều hướng"
           >
             <Menu className="size-5" />
           </button>
         )}
         <div className="flex items-center gap-1.5 text-xs text-muted-light font-normal hidden sm:flex shrink-0">
-          <span>Smart Canteen</span>
+          <span>Mino Admin</span>
           <span>/</span>
         </div>
-        <h1 className="text-xs sm:text-sm md:text-base font-semibold text-foreground tracking-tight truncate">
+        <h1 className="text-xs sm:text-sm md:text-base font-bold text-slate-900 tracking-tight truncate">
           {title}
         </h1>
       </div>
@@ -61,41 +65,24 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
         {/* Canteen Selector */}
         {user?.role === 'SUPER_ADMIN' ? (
-          <div className="relative">
-            <div className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none text-muted">
-              <Building2 className="size-3.5" />
-            </div>
-            <select
-              value={selectedCanteenId}
-              onChange={(e) => setSelectedCanteenId(e.target.value)}
-              className="h-8.5 pl-8 pr-7 bg-surface border border-border rounded-lg text-xs font-medium text-foreground hover:border-slate-300 focus:outline-hidden focus:border-primary focus:ring-2 focus:ring-primary/15 cursor-pointer appearance-none shadow-xs transition-colors max-w-[155px] sm:max-w-none truncate"
-            >
-              <option value="ALL">Toàn chuỗi Căn tin</option>
-              {canteens.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="size-3 text-muted absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
+          <SelectDropdown
+            value={selectedCanteenId}
+            onChange={setSelectedCanteenId}
+            align="right"
+            className="w-[180px] sm:w-[250px]"
+            buttonClassName="bg-slate-50/80 hover:bg-white font-semibold shadow-2xs"
+            menuClassName="min-w-[260px]"
+            icon={<Building2 className="size-3.5 text-[#0057b8]" />}
+            options={[
+              { value: 'ALL', label: 'Toàn chuỗi Căn tin' },
+              ...canteens.map((c) => ({ value: c.id, label: c.name })),
+            ]}
+          />
         ) : (
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground-subtle bg-slate-50 px-3 py-1.5 rounded-lg border border-border truncate max-w-[150px] sm:max-w-none shadow-xs">
-            <Building2 className="size-3 text-muted shrink-0" />
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-50/90 px-3 py-1.5 rounded-xl border border-slate-200/80 truncate max-w-[160px] sm:max-w-none shadow-2xs">
+            <Building2 className="size-3.5 text-[#0057b8] shrink-0" />
             <span className="truncate">{canteens.find((c) => c.id === selectedCanteenId)?.name || 'Cơ sở hiện tại'}</span>
           </span>
-        )}
-
-        {/* Refresh Action */}
-        {onRefresh && (
-          <button
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            className="size-8.5 rounded-lg text-muted hover:text-foreground hover:bg-slate-100 border border-border transition-colors cursor-pointer flex items-center justify-center outline-hidden disabled:opacity-50 shadow-xs"
-            title="Làm mới dữ liệu"
-          >
-            <RefreshCw className={`size-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </button>
         )}
       </div>
     </header>
